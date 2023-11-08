@@ -12,6 +12,7 @@
 - [API Endpoints](#api-endpoints)
 - [Performance Benchmarking](#performance-benchmarking)
 - [Future Considerations](#future-considerations)
+- [Story Point Estimation](#story-point-estimation)
 
 ## Introduction
 
@@ -20,33 +21,48 @@ The purpose of this document is to outline the design for a Distributed Semantic
 ## System Architecture
 
 ```mermaid
-flowchart TD
-    LB[Load Balancer]
-    N1[Node 1]
-    N2[Node 2]
-    N3[Node 3]
-    DB[(JSON KV Store)]
-    
-    internet[Internet] -->|Articles| LB
-    LB --> N1
-    LB --> N2
-    LB --> N3
-    N1 -->|Writes/Updates| DB
-    N2 -->|Writes/Updates| DB
-    N3 -->|Writes/Updates| DB
-```    
+flowchart TB
+    internet(Internet) -->|Articles| LB[Load Balancer]
+    LB --> N1[Node 1]
+    LB --> N2[Node 2]
+    LB --> N3[Node 3]
 
-This diagram represents a high-level view of the system's architecture. The Load Balancer distributes incoming articles to nodes that process the data and write updates to their respective JSON KV Stores.
+    N1 --> KV1[(KV Store 1)]
+    N2 --> KV2[(KV Store 2)]
+    N3 --> KV3[(KV Store 3)]
+
+    PAXOS{{"Paxos Consensus"}}
+    N1 <-->|Sync| PAXOS
+    N2 <-->|Sync| PAXOS
+    N3 <-->|Sync| PAXOS
+
+    classDef kvstore fill:#f96;
+    class KV1,KV2,KV3 kvstore;
+```
+This diagram represents a high-level view of the system's architecture where each node has its own JSON KV Store for state data. The Paxos consensus mechanism synchronizes the updates across the nodes.
 
 ## Node Design
-Each node is responsible for the following:
+Each node is responsible for:
 
 1. Creating a campaign with default MDims.
-2. Processing articles by updating MDims based on mock metadata extraction results.
-3. Storing processed state changes in both local append logs and the JSON KV Store.
+2. Processing articles by extracting MDims and aggregating these into the existing values.
+3. Handling consensus through Paxos to ensure each node's view of the JSON KV Store is consistent.
+4. Aggregated MDim Calculation
+
+### When a new MDim value is processed, the node will:
+
+Retrieve the current MDim value and the count of processed values for the date.
+Aggregate the new value using the formula: 
+
+
+![Equation](https://quicklatex.com/cache3/b3/ql_90e82a9f045228076eff61b28b3e83b3_l3.png)
+
+
+Update the MDim value and increment the processed count.
+Share this processed information with other nodes during the Paxos consensus stage.
 
 ## Networking and Communication
-The system will use HTTP/REST for communication between nodes for its simplicity and ease of implementation. Each node will have a RESTful API that allows for creating campaigns, processing articles, and reading the current state of MDims.
+The system will use HTTP/REST for communication between nodes due to its simplicity and ease of implementation. Each node will have a RESTful API that allows for creating campaigns, processing articles, and reading the current state of MDims.
 
 ## Load Balancing Strategy
 The system will use a round-robin algorithm implemented within the Load Balancer to distribute incoming article processing requests evenly across available nodes.
@@ -64,50 +80,52 @@ sequenceDiagram
     participant L as Append Log
     participant S as Snapshot Function
     participant J as JSON KV Store
+    participant P as Paxos Consensus
     A ->> LB: New Article
     LB ->> N: Assign Article Processing
     N ->> G: Send Content for Analysis
     G -->> N: Return MDim Values
     N ->> L: Record Operation
-    N ->> J: Update MDims
+    N ->> J: Aggregate MDims
+    J -->> P: Share Update
+    P -->> J: Synchronize State
     S ->> J: Perform Periodic Snapshot
     S -->> L: Trigger Log Clearance
-    N -->> S: Confirm Snapshot Completion
     L -->> N: Confirm Log Cleared
+    N -->> S: Confirm Snapshot Completion
 ```
-This sequence diagram shows the flow of article processing, logging, and snapshotting.
+This sequence diagram elaborates on the storage management and synchronization process involving Paxos consensus.
 
 ## Metadata Extraction
-During the PoC phase, the metadata extraction will simply return random values between 0 and 1 for the MDims. For the full implementation, metadata extraction would involve analyzing the article content to obtain sentiment scores relevant to each MDim. The specifics of NLP integration will be explored post-PoC.
+During the PoC phase, the metadata extraction will simply return random values between 0 and 1 for the MDims. For full implementation, metadata extraction would involve analyzing the article content to obtain sentiment scores relevant to each MDim. The specifics of NLP integration will be explored post-PoC.
 
 ## API Endpoints
 POST /createCampaign
-Creates a new campaign with a given topic and default MDims.
-Request Body: 
+Creates a new campaign with a given topic and default MDims. Request Body:
+
 ```json
 { "topic": "string" }
 ```
-Response: 
+Response:
+
 ```json
 { "campaignId": "string" }
 ```
-
 POST /processArticle
-Processes an article and updates MDims for the relevant campaign and date.
-Request Body: 
+Processes an article and updates MDims for the relevant campaign and date. Request Body:
+
 ```json
 { "campaignId": "string", "articleContent": "string", "publishedDate": "string" }
 ```
-Response: 
-```json
-{ "success": boolean }
-```
+Response:
 
+```
+{ "success": boolean, "newMDims": { "mdim1": float, ... } }
+```
 GET /readMDims
-Returns the MDims for a given campaign and date.
-Query Parameters: campaignId=string&date=string
-Response: 
-```json
+Returns the MDims for a given campaign and date. Query Parameters: campaignId=string&date=string Response:
+
+```
 { "MDims": { "direction_quality": float, ... } }
 ```
 
@@ -117,6 +135,19 @@ Performance benchmarking will be carried out using a custom-built tool to simula
 ## Future Considerations
 Post-PoC, the system design will be revised to consider scaling, robust metadata extraction using NLP, real-time monitoring and alerting, data persistence scalability, and system resilience. The design will also incorporate user feedback and address performance bottlenecks identified during the PoC phase.
 
-This concludes the detailed design document for the Distributed Semantic Analysis/Monitoring system. The document provides a template for team members to start implementation from scratch. The system outlined in this document should serve as a framework that is capable of evolving based on the requirements and feedback gathered during the PoC phase.
+## Story Point Estimation
+| Task                         | Description                                                                                      | Estimated Points |
+|------------------------------|--------------------------------------------------------------------------------------------------|------------------|
+| System Architecture          | Overall design, including node architecture and data flow diagrams.                              | 5                |
+| Node Design                  | Define the responsibilities, functionalities, and state management of an individual node.        | 3                |
+| Networking and Communication | Specify communication protocols and mechanisms for data exchange between nodes.                  | 3                |
+| Load Balancing Strategy      | Develop the algorithm or strategy for distributing workloads across nodes.                       | 2                |
+| Storage and Log Management   | Design the JSON KV store, log file functioning, and snapshotting mechanism.                      | 3                |
+| Metadata Extraction          | Plan a simplified approach for MDims extraction and propose a mock implementation for the PoC.   | 2                |
+| API Endpoints                | Detail each API endpoint, including expected inputs, outputs, and error handling.                | 3                |
+| Performance Benchmarking     | Formulate a plan for how to benchmark the system and analyze its performance.                    | 5                |
+| Future Considerations        | Outline potential enhancements, scalability options, and other considerations for post-PoC.     | 1                |
+| Overall Documentation        | Writing, formatting the document, and creating diagrams.                                        | 8                |
 
-This design document is intended as a starting point. It covers key components required for distributed system design with performance in mind. As the PoC evolves, the design can be iterated on and adapted based on the findings and
+## Conclusion
+This detailed design document provides the foundation for implementing the Distributed Semantic Analysis/Monitoring system from scratch. It outlines the architecture, components, and processes necessary for a PoC that can be scaled and enhanced based on future requirements and findings.
