@@ -18,6 +18,92 @@
 
 The purpose of this document is to outline the design for a Distributed Semantic Analysis/Monitoring system, which analyzes public sentiment across various dimensions in articles related to specific topics over time. The system aims to demonstrate improved processing speed and efficiency by using a distributed approach compared to a synchronous single-node system.
 
+## Identification of Problem
+
+The objective of this project is to develop a Distributed Semantic Analysis/Monitoring System that analyzes public sentiment across various dimensions in articles related to specific topics over time. The system aims to demonstrate improved processing speed and efficiency by using a distributed approach compared to a synchronous single-node system.
+
+## Main Components
+| Components                         | Description                                                                                                       |
+|------------------------------------|-------------------------------------------------------------------------------------------------------------------|
+| Node                               | Responsible for creating campaigns, processing articles, and handling consensus through the Paxos mechanism.       Maintains a JSON KV Store for state data.                                                                         |
+| Paxos Consensus Mechanism          | Orchestrates the synchronization of updates across nodes to ensure a consistent view of the JSON KV Store.        Involves initiation, proposal phase, prepare phase, promise phase, acceptance condition, accept phase, and commitment phase. |
+| Load Balancer                      | Distributes incoming article processing requests evenly across available nodes using a round-robin algorithm.     |
+| JSON KV Store                      | Stores node state data, including campaign information and processed MDims.                                       Maintains an append-only log file for operations, periodically compressed and snapshot for updates.                 |
+| Metadata Extraction                | Full implementation involves analyzing article content to obtain sentiment scores relevant to each MDim.             |
+| HTTP/REST Communication            | Nodes communicate using HTTP/REST for simplicity and ease of implementation.                                       Each node has a RESTful API supporting endpoints for creating campaigns, processing articles, and reading MDims.  |
+
+## Guarantees to Users
+
+1. Updates to MDims for sentiment analysis are consistent across nodes, providing a unified view.
+2. MDims are stored in an append-only mode, maintaining a historical record of sentiment changes.
+3. Redundant updates are avoided; the system compares MDims to ensure the sentiment of an article is updated only once for a specific date.
+
+## Proposed Solution
+### State 1: Idle
+
+**Description:**
+- **Purpose:** The initial state where the system is ready to receive requests and initiates the process for creating a new campaign.
+- **Transitions:**
+  - **Campaign Creation Request:**
+    - **Conditions:** Triggered by an incoming request to create a new campaign (POST /createCampaign).
+
+### State 2: Campaign Creation
+
+**Description:**
+- **Purpose:** This state is entered when the system receives a valid request to create a new campaign. It involves generating a unique campaignId and initializing the campaign in the JSON KV Store.
+- **Actions:**
+  - **Generate Campaign ID:**
+    - Generate a unique identifier (campaignId) for the new campaign.
+  - **Initialize Campaign:**
+    - Set up the new campaign in the JSON KV Store with default MDims.
+- **Transitions:**
+  - **Article Processing Request:**
+    - **Conditions:** Triggered by an incoming request to process an article (POST /processArticle).
+
+### State 3: Article Processing
+
+**Description:**
+- **Purpose:** This state is entered when the system receives a valid request to process an article. It involves using the OPENAI API to extract the MDims from the article content.
+- **Actions:**
+  - Initiates connection to the OPENAI API.
+  - Extract MDims from the article content.
+- **Transitions:**
+  - **Transition to the "MDim Analyzer" state:**
+    - **Conditions:** Triggered by an incoming request to process the MDims.
+
+### State 4: MDim Analyzer
+
+**Description:**
+- **Purpose:** This state is entered when the system initiates the retrieval of MDims for a specified campaign and date. The purpose of this state is initiating the Paxos consensus mechanism and also performs the aggregation step.
+- **Actions:**
+  - Retrieve the current MDims and the count of processed values for the specified date.
+  - Aggregate the new MDims using a defined formula.
+  - Initiate the Paxos consensus mechanism to synchronize the updated MDims across nodes.
+  - Initiate the Paxos consensus mechanism for subsequent updates.
+- **Transitions:**
+  - **Consensus Handling Initiation:**
+    - **Conditions:** Triggered by an incoming request to initiate the Paxos consensus process.
+
+### State 5: Consensus Handling
+
+**Description:**
+- **Purpose:** This state is entered when the system initiates the Paxos consensus mechanism to synchronize updates across nodes.
+- **Actions:**
+  - Execute the Paxos consensus mechanism to synchronize updates across nodes.
+- **Transitions:**
+  - **Return to Idle (Completion):**
+    - **Conditions:** Occurs after successful consensus and completion of the consensus process. The system is ready to receive new requests.
+
+Finally, the state machine diagram is shown below:
+```mermaid
+stateDiagram
+    Idle --> CampaignCreation : /createCampaign
+    CampaignCreation --> ArticleProcessing : /processArticle
+    ArticleProcessing --> MDimAnalyzer : Extracted MDims
+    MDimAnalyzer --> ConsensusHandling : Initiate Paxos Consensus
+    ConsensusHandling --> Idle : Completion 
+```
+
 ## System Architecture
 
 ```mermaid
@@ -131,6 +217,43 @@ Returns the MDims for a given campaign and date. Query Parameters: campaignId=st
 
 ## Performance Benchmarking
 Performance benchmarking will be carried out using a custom-built tool to simulate article streaming and measure throughput across both the distributed system and a synchronous single-node reference configuration. The metrics collected will include articles processed per second, latency, and error rate.
+
+## Potential System Failures
+1. **Node Failure:**
+   - A node may fail during various stages, such as campaign creation, article processing, or the Paxos consensus process.
+
+2. **Proposal Rejection:**
+   - Proposals during the Paxos process may be rejected, leading to the need for the proposer to adapt and propose a new update.
+
+3. **Network Partitions:**
+   - Network partitions may occur, disrupting communication between nodes. Paxos is designed to tolerate partitions to some extent, but prolonged partitions may pose challenges.
+
+4. **Duplicate Operations:**
+   - Nodes must ensure that duplicate operations are not processed. This is critical during the Paxos consensus process and in handling article processing requests.
+
+5. **Invalid Article Processing Request:**
+   - The system needs to handle cases where an article processing request is invalid or contains incorrect parameters.
+
+6. **OPENAI API Connection Failure:**
+   - Failures in establishing a connection to the OPENAI API during the article processing phase could occur.
+
+7. **MDim Retrieval Failure:**
+   - Issues in retrieving MDims or counting processed values for a specified date may lead to failures in the aggregation process.
+
+8. **Consensus Process Failure:**
+   - Failures during the Paxos consensus process may prevent the synchronization of updates across nodes.
+
+9. **Load Balancer Failure:**
+   - Issues with the load balancer may impact the even distribution of article processing requests across nodes.
+
+10. **JSON KV Store Failure:**
+    - Failures in the JSON KV store, where state data is maintained, could lead to data inconsistencies.
+
+11. **Campaign ID Generation Failure:**
+    - Failure to generate a unique campaign ID during campaign creation could lead to conflicts.
+
+12. **Article Content Extraction Failure:**
+    - Errors in extracting MDims from the article content during the article processing phase.
 
 ## Future Considerations
 Post-PoC, the system design will be revised to consider scaling, robust metadata extraction using NLP, real-time monitoring and alerting, data persistence scalability, and system resilience. The design will also incorporate user feedback and address performance bottlenecks identified during the PoC phase.
