@@ -62,78 +62,67 @@ Update the MDim value and increment the processed count.
 Share this processed information with other nodes during the Paxos consensus stage.
 
 ## Paxos Consensus Process
-Initiation:
-The Paxos consensus process is initiated when there's a need to update MDims for sentiment analysis. This occurs, for example, during the processing of an article.
 
-Proposal Phase:
-The node that initiates the consensus process (the proposer) sends a proposal to all nodes. The proposal includes the updated MDims for a specific date related to the sentiment of the article.
+### Stages
+1. Prepare (proposers --> acceptors)
+   * Initiated on client `write` request
+   * Send **All Nodes** `prepare` message with `seq_num`
+2. Promise (acceptors --> proposers)
+   * **All Nodes** `promise` with `success` or `fail` with `highest_seq_accepted`
+   * Based on Quorum, proceeds to *Accept* if Quorum attained else, retry *Prepare* with `highest_seq_accepted + 1` 
+3. Accept (proposers --> acceptors)
+   * When Quorum achieved for `sequence_number`, send `accept` message with `value` to append and `key` to append to.
+   * 50% quorum for acceptance
+4. Commitment (acceptors --> learners)
+   * acceptors share learnings with **All Nodes**
 
-Prepare Phase:
-Nodes receiving the proposal respond with a "prepare" message, indicating their readiness to accept the proposed update.
-Each node checks its local state to ensure it has the latest information about the specified article and date.
-
-Promise Phase:
-If a node receives a "prepare" message and determines that the proposed update is valid, it responds with a "promise" message. This message includes information about its current state and whether it has accepted any other proposals for the same article and date.
-
-Acceptance Condition:
-For a proposal to be accepted, a node must receive promises from a majority of nodes in the system.
-
-Accept Phase:
-If the proposer receives promises from a majority of nodes, it sends an "accept" message to all nodes.
-Nodes, upon receiving the "accept" message, update their local state with the proposed MDims and respond with an acknowledgment.
-
-Commitment Phase:
-Once the proposer receives acknowledgments from a majority of nodes, it sends a "commit" message to finalize the update in the distributed JSON KV Store.
-Nodes, upon receiving the "commit" message, append the new MDims to the existing ones for the specified article and date.
-
-Handling Failures:
-Node Failure:
-If a node fails during the Paxos process, the system should be designed to detect and recover from failures.
-The Paxos process can be restarted with a new proposer.
-
-Proposal Rejection:
-If a proposal is rejected during the Prepare or Accept phases, the proposer must adapt and propose a new update.
-
-Network Partitions:
-Paxos is designed to tolerate network partitions to a certain extent. However, prolonged partitions may require additional mechanisms for reconciliation.
-
-Integration with System States:
-Consensus Handling State:
-The Paxos consensus process is initiated within the "Consensus Handling" state of the system, specific to updating MDims for sentiment analysis.
-
-Transitions:
-Transitions to other states (e.g., Article Processing) depend on the outcomes of the Paxos consensus process.
-
-Advantages and Considerations:
-Sentiment Analysis Integration:
-Paxos ensures that updates to MDims for sentiment analysis are consistent across nodes, providing a unified view.
-
-MDim Writing in Append-Only Mode:
-The MDims are appended in an append-only mode in the distributed JSON KV Store, maintaining a historical record of sentiment changes.
-
-Comparing MDims:
-The system compares MDims of the same article for the same date to avoid redundant updates, ensuring that the sentiment of an article is updated only once for a specific date.
-
+#### Lifecycle Diagram
 ```mermaid
 sequenceDiagram
-    participant Initiator as Initiator
-    participant Proposer as Proposer
-    participant Acceptor as Acceptor
-    participant Learner as Learner
+    participant I as Initiator
+    participant P as Proposer
+    participant A as Acceptor
+    participant L as Learner
 
-    Initiator ->> Proposer: Initiate Paxos Consensus to update MDims
-    Proposer ->> Acceptor: Proposal (MDims: { "date": "2023-11-16", "sentiment": "positive" })
-    Acceptor -->> Proposer: Promise
-    Initiator ->> Proposer: Prepare Phase
-    Proposer -->> Acceptor: Accept Proposal (MDims: { "date": "2023-11-16", "sentiment": "positive" })
-    Acceptor -->> Proposer: Accepted
-    Initiator ->> Learner: Commit Phase (MDims: { "date": "2023-11-16", "sentiment": "positive" })
-    Learner -->> Initiator: Acknowledgment
+    I ->> P: Initiate Paxos<br/>Consensus
+    P ->> A: Prepare<br/>(seq_num)
+    A -->> P: Promise<br/>(Accept | Reject)
+    P -->> I: Fail after<br/>3 retries
+    P ->> A: Accept Proposal<br/>(seq_num, MDims)
+    A ->> L: Commit Proposal<br/>(MDims)
+    P -->> I: Success
 
-    Note right of Proposer: Proposer sends MDims for sentiment analysis along with the proposal.
-    Note right of Acceptor: Acceptor checks local state, promises to accept if the proposal is valid.
-    Note right of Learner: Learner updates the distributed KV Store with the new MDims for the specified date.
+    Note right of P: Proposer gets MDims from GPT <br/> after sentiment analysis
+    Note right of A: Acceptor checks local state,<br/>promises if valid
+    Note right of L: Learner updates KV Store<br/>with MDims
 ```
+
+### Handling Failures
+* Node Failure
+  * If a node fails during the consensus process, the client should be notified of failure so they may try again
+
+* Proposal Rejection
+  * If a proposal is rejected during the Prepare or Accept phases, the proposer must to reach 3 attempts
+
+* Network Partitions
+  * Paxos is designed to tolerate network partitions to a certain extent. However, prolonged partitions may require additional mechanisms for reconciliation.
+
+### Integration with System States
+#### Consensus Handling State
+The Paxos consensus process is initiated within the "Consensus Handling" state of the system, specific to updating MDims for sentiment analysis.
+
+#### Transitions
+Transitions to other states (e.g., Article Processing) depend on the outcomes of the Paxos consensus process.
+
+### Advantages and Considerations
+#### Sentiment Analysis Integration
+Paxos ensures that updates to MDims for sentiment analysis are consistent across nodes, providing a unified view and increased fault tolerance of the system.
+
+#### MDim Writing in Append-Only Mode
+The MDims are appended in an append-only mode in the distributed JSON KV Store, as processing order is not a requirement.
+
+#### Comparing MDims
+The system is able to query the system before processing with GPT to ensure that the document has not already been processed for a campaign in the past thereby boosting processing times.
 
 
 ## Networking and Communication
