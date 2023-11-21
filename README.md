@@ -42,7 +42,7 @@ retrieving the Metalanguage Dimension values and coming up with answer based on 
 ### Our Proposal
 We propose a Distributed System that is able to process a large set of articles to answer questions that would
 traditionally require a large number of human operators labelling articles manually in order to produce an answer. The
-system aims to demonstrate improved processing speed and efficiency by using a distributed approach compared to a
+system aims to demonstrate improved processing speed and increased fault tolerance by using a distributed approach compared to a
 synchronous single-node system.
 
 This design document outlines the design for a Distributed Semantic Analysis/Monitoring system,
