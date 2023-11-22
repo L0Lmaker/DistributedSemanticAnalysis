@@ -21,8 +21,10 @@ of Articles, Social Media Posts, and YouTube video transcripts (published in 202
 question?
 
 ### Naive Approach
-In order to monitor a subject, we need to observe the subject across a few parameters or dimensions. If we are to stick
-to the same example of company X, perhaps the following would be inferred from the articles: [value between 0-1]
+In order to monitor a topic of interest, we need to observe information related to the topic across a few 
+parameters or dimensions. If we are to stick
+to the same example of company X, perhaps the following would be inferred from the articles in the form of a value 
+between 0-1.
 
 1. Overall User Satisfaction
 2. Trust in X
@@ -31,10 +33,10 @@ to the same example of company X, perhaps the following would be inferred from t
 5. Future Outlook of X
 
 If we can obtain values between 0-1 for these **Metalanguage Dimensions** for our articles published in 2023, we could
-sufficiently answer the question we sought to answer. The information may also be used to obtain plots of data.
+sufficiently answer the question. The information may also be used to obtain plots of data.
 
 This analysis would traditionally happen via a manual review and labelling of articles, but it can also be done via 
-sentiment analysis algorithms.
+sentiment analysis algorithms (1 node system).
 
 Today, we can use a tool like GPT to analyse any form of text content. The naive approach would involve sequentially 
 retrieving the Metalanguage Dimension values and coming up with answer based on the values obtained.
@@ -46,6 +48,13 @@ system aims to demonstrate improved processing speed and increased fault toleran
 synchronous single-node system. This design document outlines the design for this Distributed System.
 
 ## High Level Interface
+
+#### Description
+The user is able to take 3 different actions.
+1. Campaign Creation
+2. Article Processing
+3. Read Requests
+
 ```mermaid
 graph LR
     User1(User) -- "createCampaign(topic)" --> DS((Distributed System))
@@ -53,25 +62,104 @@ graph LR
     DS((Distributed System)) -- "readMetalanguageDimension<br/>(campaignId, date)" --> User2(User)
 ```
 
+
 ## Main Components
 
-| Components                | Description                                                                                                                                                                                                                         |
-|---------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Node                      | Responsible for creating campaigns, processing articles, and handling consensus through the Paxos mechanism.       Maintains a JSON KV Store for state data.                                                                        |
-| Paxos Consensus Mechanism | Orchestrates the synchronization of updates across nodes to ensure a consistent view of the JSON KV Store.        Involves various phases.                                                                                          |
-| Load Balancer             | Distributes incoming article processing requests evenly across available nodes using a round-robin algorithm.                                                                                                                       |
-| JSON KV Store             | Stores node state data, including campaign information and processed MDims.                                       Maintains an append-only log file for operations, periodically compressed and snapshot for updates.               |
-| Metalanguage Extraction   | Full implementation involves analyzing article content to obtain sentiment scores relevant to each MDim.                                                                                                                            |
-| HTTP/REST Communication   | Nodes communicate using HTTP/REST for simplicity and ease of implementation.                                       Each node has a RESTful API supporting endpoints for creating campaigns, processing articles, and reading MDims. |
-| Client                    | Initiates requests for processing articles or creating campaigns                                                                                                                                                                    |
+| Components                | Description                                                                                                                                                                                 |
+|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Client                    | Initiates requests to the Distributed System.                                                                                                                                               |
+| Article/Document          | The document being analyzed in the Distributed System. Can be used interchangeably.                                                                  <br/>                                  |
+| Load Balancer             | Connects Clients to a Node that is ready to consume Requests                                                                                                                                |
+| Node                      | Handles campaigns creation, article processing, and read requests. Initiates Paxos Consensus to share new information with all the other nodes.                                             |
+| Topic                     | Research question that Clients want to find answers to.                                                                                                                                     |
+| Campaign                  | An active topic that has been defined in the Distributed System. Each Campaign has an associated set of Metalanguage Dimensions.                                                            |
+| Metalanguage Dimensions   | A set of parameters, that represents features that are being assessed about a <br/><br/>document. each MDim is expressed as a value between 0-1 to indicate the strength of that dimension. |
+| MDims Keys                | Refers to the dimensions themselves and not the values.                                                                                                                                     |
+| MDims Values              | Refers to the values for each key in the MDims Keys.                                                                                                                                        |
+| Filter                    | The process via which an article is determined to be related to a research topic or not.                                                                                                    |
+| KV Store                  | Where active campaigns are tracked and results of article processing is stored.                                                                                                             |
+| Paxos Consensus Mechanism | Orchestrates the synchronization of updates across nodes to ensure a consistent view of the KV Store.                                                                                       |
 
-## Properties
+#### Metalanguage Dimensions Example
 
-1. Updates to MDims for sentiment analysis are consistent across nodes, providing a unified view.
-2. MDims are stored in an append-only mode, maintaining a historical record of sentiment changes.
-3. Redundant updates are avoided; the system compares MDims to ensure the sentiment of an article is updated only once
-   for a specific date.
-4. Filter process will assess articles for relevance to topic, only article processing if filter check passes.
+If we create a campaign with the topic: "What is the impression of Bitcoin in my documents?"
+
+The MDims Keys may be the following:
+```
+["generalAttitudeTowardsBitcoin", "trustInBitcoin", "investmentPotential", "futureOutlookOfBitcoin", "usabilityOfBitcoin"]
+```
+
+These MDim keys are automatically obtained via GPT when a campaign is created. When an article is processed the MDim 
+Values are obtained via GPT as well.
+
+#### Filters Example
+
+Not all documents that are processed for a given campaign may actually be related to the campaign topic. For example,
+if my research topic was about Bitcoin and the document I pass is about Donald Trump, it is probably not related to 
+the campaign, in which case, it should be rejected and the client should be notified.
+
+The filter check also utilizes GPT. We define a system message such that the response is a fixed JSON which looks 
+like this:
+```json
+{
+  "isRelevant": true 
+}
+```
+Note: the return would be false if the document was not related to the campaign.
+
+## KV Store Schema
+The following is the schema of the KV store that each Node maintains:
+```json
+{
+  "Campaigns": {
+    "<campaignId>": {
+      "topic": "string",
+      "creationDate": "string",
+      "mDimsKeys": ["mdim1", "mdim2", ...],
+    },
+    ...
+  },
+  "Articles": {
+    "<campaignId>": {
+      "<articleId>": {
+        "publishedDate": "string",
+        "mDimsValues": {
+          "mdim1": float, // Value between 0-1
+          "mdim2": float,
+          ...
+        },
+        "isRelevant": boolean // The result of the filter check.
+      },
+      ...
+    }
+  },
+  "MDimValuesByDate": {
+    "<campaignId>": {
+      "<date>": {
+        "<articleId>": {
+          "mDimsValues": {
+            "mdim1": float,
+            "mdim2": float,
+            ...
+          }
+        },
+        ...
+      }
+    }
+  }
+}
+```
+The KV store is synced between nodes via a Paxos Consensus Mechanism. It is triggered when new campaigns are being 
+created and when article processing results needs to be stored.
+
+
+// Add GPT on each node assumption
+
+## Properties of our System
+
+1. New MDim Values that are processed are consistent across nodes, providing a unified view.
+2. New MDim Values are stored in an append-only mode.
+3. Only if the document being processed
 
 ## Operations
 
@@ -82,16 +170,14 @@ graph LR
 - **Inputs:**
     - topic: string
     - topic is the question that is being asked in natural language
-- **Actions:**
-    -  **Generate Metalanguage Dimensions to assess**
-        - using GPT
-    -  **Generate Filter Dimensions to assess**
+- **Actions Taken:**
+    -  **Generate MDim Keys to assess**
         - using GPT
     - **Generate Campaign ID:**
         - Generate a unique identifier (campaignId) for the new campaign.
     - **Initialize Campaign:**
-        - Set up the new campaign in the JSON KV Store with MDims and Filter information.
-        - Use Paxos to sync campaign information (includes topic, Metalanguage Dimensions and Filter Dimensions) across 
+        - Set up the new campaign in the KV Store with MDims Keys.
+        - Use Paxos to sync campaign information (includes topic and MDim Keys) across 
           nodes
 
 ### Article Processing
@@ -102,10 +188,13 @@ graph LR
     - articleContent: string
     - publishDate: date
 - **Actions:**
-    - Initiates connection to the OPENAI API.
-    - Runs article through filter to assess relevance.
-    - Extract MDims from the article content if filter check passes.
-    - Sync results across nodes
+    - **Run Filter Check**
+        - using GPT 
+    -  **Generate MDim Values**
+        - using GPT
+    - **Store Result**
+        - In KV Store
+        - Use Paxos to sync across Nodes
 
 ### Reading Results
 
@@ -114,16 +203,14 @@ graph LR
     - campaignId: string
     - publishDate: date
 - **Actions:**
-    - Runs a round of Paxos read
+    - Runs a round of Paxos Read
     - returns set of MDim calculations with article Ids for the date specified
-
-Finally, the state machine diagram is shown below:
 
 ## System Architecture
 
 ```mermaid
 flowchart TB
-    internet(Internet) -->|Articles| LB[Load Balancer]
+    internet(Data Source) -->|Articles| LB[Load Balancer]
     LB --> N1[Node 1]
     LB --> N2[Node 2]
     LB --> N3[Node 3]
@@ -141,47 +228,60 @@ flowchart TB
     class KV1,KV2,KV3 kvstore;
 ```
 
-This diagram represents a high-level view of the system's architecture where each node has its own JSON KV Store for
-state data. The Paxos consensus mechanism synchronizes the updates across the nodes.
+This diagram represents a high-level view of the system's architecture where each node has its own KV Store for
+data storage. The Paxos consensus mechanism synchronizes the updates across the nodes as information is added to the 
+system.
 
 ## Information Pipeline
 
 ### Stages of Creating a new Campaign 
+ 
+The following diagram shows the steps that are taken when creating a new campaign in the system. We assume that the 
+Load Balancer has assigned us a Node that will respond to requests.
 ```mermaid
 flowchart TD
-    QI[New Campaign Question]
+    QI((New <br/> Campaign <br/> Topic))
     ND((Node))
-    GPT[GPT]
-    MDIMS[MDims]
-    FT[Filter]
-    
-    QI --> |Send to| ND
-    ND --> |Generate MDims| GPT
-    ND --> |Generate Filter| GPT
-    GPT --> |generates| MDIMS
-    GPT --> |generates| FT
-    MDIMS --> |campaignID| SharedKV[(Shared KV Store)]
-    FT --> |campaignID| SharedKV[(Shared KV Store)]
-    
+    GPT[GPT Engine]
+    MDIMS((MDim Keys))
+    SharedKV[(KV Store)]
+
+    QI --> |1. Send Topic| ND
+    ND --> |2. Request MDim Keys| GPT
+    GPT --> |3. Creates MDim Keys| MDIMS
+    MDIMS --> |4. Return MDim Keys| ND
+    ND --> |5. Store Campaign Information| SharedKV
+    ND --> |6. Respond to Client| QI
+
     classDef kvstore fill:#f96;
     class SharedKV kvstore;
 ```
 
-### Stages of Document Processing
-```mermaid
-flowchart TD
-    DOC[Incoming Document]
-    NODE((Node))
-    GPT_FILTER[GPT Filter Assessment]
-    FILT_CHECK{Filter Check}
-    GPT_MDim[GPT Metalanguage Dimensions `MDim` Assessment]
 
-    DOC --> NODE
-    NODE --> GPT_FILTER
-    GPT_FILTER --> FILT_CHECK
-    FILT_CHECK -->|If Not Filtered| GPT_MDim
-    FILT_CHECK -->|If Filtered| END[End Process]
-    GPT_MDim --> SharedKV[(Shared KV Store)]
+### Stages of Document Processing
+The following diagram shows the steps that are taken when processing a new document in the system. 
+We assume that the Load Balancer has assigned us a Node that will respond to requests.
+
+Note that the two nodes in the diagram refer to the same node. It is split up for readability.
+```mermaid
+flowchart LR
+    DOC((New <br/> Document))
+    NODE((Node))
+    NODE2((Node))
+    GPT_FILTER[GPT Engine Run 1]
+    GPT_MDIMS[GPT Engine Run 2]
+    FILT_CHECK{Filter}
+    
+    DOC --> |1. Send To| NODE
+    NODE --> |2. Run Filter Check| GPT_FILTER
+    GPT_FILTER --> |3. Response| NODE 
+    NODE --> FILT_CHECK
+    FILT_CHECK -->|If Passes Check| NODE2
+    NODE2 --> |4. Generate MDim Values| GPT_MDIMS
+    GPT_MDIMS --> |5. Response| NODE2
+    FILT_CHECK -->|If Fails Check| END[End Process <br/> and <br/> Notify Client]
+    NODE2 --> |6. Store MDim Values|SharedKV[(KV Store)]
+    NODE2 --> |7. Respond to Client| DOC
 
     classDef filtered fill:#f96;
     class END filtered;
@@ -191,46 +291,59 @@ flowchart TD
 ```
 
 ### Stages of Querying Results
+The following diagram shows the steps that are taken when a read request is issued in the system. 
+We assume that the Load Balancer has assigned us a Node that will respond to requests.
 ```mermaid
 flowchart TD
     QI[New Query]
     ND((Node))
     
-    QI --> |campaignID, date| ND
-    ND --> SharedKV[(Shared KV Store)]
-    SharedKV[(Shared KV Store)] --> ND
-    ND --> |Result| QI
+    QI --> |1. Get Information for <br/> campaignID, date| ND
+    ND --> |2. Request information| SharedKV[(Shared KV Store)]
+    SharedKV[(KV Store)] --> |3. Return information| ND
+    ND --> |4. Return Result| QI
     
     classDef kvstore fill:#f96;
     class SharedKV kvstore;
 ```
+To increase confidence in the results returned, we can run a round of Paxos Read. i.e query a set of nodes and take 
+the union of the set of values. This would ensure that if there are nodes that are not fully up to date, they can 
+receive the missed information from the other nodes. Note that the read speed would slow down in this case.
 
 ### Load Balancer
-For all three user actions
+For all three user actions.
 ```mermaid
 flowchart LR
     REQ[Incoming Requests] --> LB[Load Balancer]
-    LB --> Q[Queue]
-    Q --> R1[Request 1]
-    Q --> R2[Request 2]
-    Q --> R3[Request 3]
-    R1 --> ND((Node 1))
-    R2 --> ND((Node 2))
-    R3 --> ND((Node 3))
-    ND1 <--> |Process| SharedKV[(Shared KV Store)]
-    ND2 <--> |Process| SharedKV
-    ND3 <--> |Process| SharedKV
+    HB[Heartbeat Monitor] -.->|Heartbeat Checks| N1[Node 1]
+    HB -.->|Heartbeat Checks| N2[Node 2]
+    HB -.->|Heartbeat Checks| N3[Node 3]
+    LB -->|Distribute to Queues| Q1[Queue Node 1]
+    LB -->|Distribute to Queues| Q2[Queue Node 2]
+    LB -->|Distribute to Queues| Q3[Queue Node 3]
+    Q1 -->|Process Next Req| ND1((Node 1))
+    Q2 -->|Process Next Req| ND2((Node 2))
+    Q3 -->|Process Next Req| ND3((Node 3))
+    ND1 <--> |Store & Sync| SKV1[(Shared KV Store 1)]
+    ND2 <--> |Store & Sync| SKV2[(Shared KV Store 2)]
+    ND3 <--> |Store & Sync| SKV3[(Shared KV Store 3)]
+
+    LB -.->|Reassign on Failure| MQ[Move Queue]
+    MQ -.->|Update Allocation| LB
 
     classDef kvstore fill:#f96;
-    class SharedKV kvstore;
+    class SKV1,SKV2,SKV3 kvstore;
+    classDef heartbeat fill:#f00, stroke:#333, stroke-width:2px;
+    class HB heartbeat;
 ```
+The Load Balancer is periodically snapshot and persisted such that on failure, we know where to pick up from again.  
 
 ## Node Design
 
 Each node is capable of:
 
-1. Creating a campaign by generating MDims.
-2. Processing articles by extracting MDim values.
+1. Creating a campaign by generating MDim Keys.
+2. Processing articles by extracting MDim Values.
 3. Handling consensus through Paxos to ensure each node's view of the JSON KV Store is consistent.
 4. Reading values from its KV store to respond to queries.
 
@@ -238,10 +351,10 @@ Each node is capable of:
 
 There is a Paxos consensus process initiated for 2 out of 3 operations in our Distributed System. 
 
-1. Campaign Creation: after generating the relevant MDims for a topic, it needs to be shared across nodes in order 
-   for all the nodes to independently be able to process articles.
+1. Campaign Creation: after generating the relevant MDim Keys for a topic, it needs to be shared across nodes in order 
+   for all the nodes to independently be able to process articles for that campaignId.
 2. Article Processing: after extracting the MDim values for an article, the results need to be shared across nodes 
-   so any node is able to respond to queries
+   so any node is able to respond to queries about that article.
 
 ### Stages
 
@@ -257,11 +370,11 @@ There is a Paxos consensus process initiated for 2 out of 3 operations in our Di
 4. Commitment (acceptors --> learners)
     * acceptors share learnings with **All Nodes**
 
-#### Lifecycle Diagram
-
+### Paxos Lifecycle Diagram
+Every node in our Distributed System will play all 3 roles of Proposer, Acceptor and Learner. 
 ```mermaid
 sequenceDiagram
-    participant I as Initiator
+    participant I as Node
     participant P as Proposer
     participant A as Acceptor
     participant L as Learner
@@ -299,7 +412,8 @@ MDims.
 ## Load Balancing Strategy
 
 The system will use a round-robin algorithm implemented within the Load Balancer to distribute incoming article
-processing requests evenly across available nodes.
+processing requests evenly across available nodes. The Load Balancer will run periodic Heartbeat checks to all nodes 
+to obtain status of nodes. If nodes do not respond, the process queue will be moved to a different active node.
 
 ## Storage and Log Management
 
@@ -329,40 +443,32 @@ sequenceDiagram
 This sequence diagram illustrates the information flow from when a new article is queued to the MDims being stored 
 in the KV store.
 
-## Metalanguage and Filter Dimensions Generation and Extraction
+## GPT Usage
 
-There are two parts to this:
-- Figuring out the Metalanguage and Filter Dimensions for a topic of interest
-- Figuring out the values for a set of Metalanguage or Filter dimensions given an article and a research topic
+There are three parts to this:
+- Filter Checks
+- MDim Keys
+- MDim Values
 
-For both of these, we will use the OpenAI API to generate the metalanguage and filter dimensions and to extract the 
-values for those dimensions from an article. 
+For all three, we will use the OpenAI API to generate the MDim Keys and MDim Values. The filter check will be a 
+simple JSON response that responds with relevance. 
 
 For example, if the research topic was: "What is the public perception of the new Martin Scorcese movie: Killers of 
-the Flower Moon", the Metalanguage dimensions to analyze may be: 
+the Flower Moon", the MDim Keys that GPT may generate is the following:
 
 1. Film Direction Quality
 2. Performance Quality
 3. Set Design Quality
 4. etc...
 
-and the filter dimensions may be:
-
-1. Relevance to Martin Scorcese
-2. Relevance to Killers of the Flower Moon
-3. Relevance to Movie
-
 For each article we process in this campaign, we will need a value between 0-1 to describe the effectiveness of the 
 movie to answer our original research question.
 
-For the filter, we will define threshold values for each filter value. In order for an article to be processed for a 
-campaignId, we will need to pass the filter check. It can only be passed if the article is assessed for the filters 
-and all the values obtained from GPT are higher than the filter values, thereby not processing an article for a 
-campaign if the contents are unrelated to the topic in question.
-
 ## API Endpoints
 ### POST /createCampaign
-Creates a new campaign with a given topic and a set of MDims. Request Body:
+Creates a new campaign with a given topic and a set of MDims. 
+
+Request Body:
 
 ```json
 {
@@ -374,14 +480,18 @@ Response:
 
 ```json
 {
-  "campaignId": "string",
-  "mDimsToAnalyse": ["mdim1", "mdim2"],
-  "filterDims": {"filter1":  float (threshold between 0-1), ...}
+  "campaignId": "string"
 }
 ```
 
+Side-effects:
+1. Store MDim Keys in KV Store
+2. Sync across Nodes
+
 ### POST /processArticle
-Processes an article and updates MDims for the relevant campaign and date. Request Body:
+Processes an article and updates MDims for the relevant campaign and date. 
+
+#### Request Body:
 
 ```json
 {
@@ -391,14 +501,24 @@ Processes an article and updates MDims for the relevant campaign and date. Reque
 }
 ```
 
-Response:
+#### Response:
 
 ```
-{ "success": boolean, "processedMDims": { "mdim1": float, ... } }
+{ "success": boolean }
 ```
 
-GET /readMDims
-Returns the MDims for a given campaign and date. Query Parameters: campaignId=string&date=string Response:
+#### Side-effects:
+1. Store MDim Values in KV Store
+2. Sync across Nodes
+
+
+### GET /readMDims
+Returns the MDims for a given campaign and date. 
+
+#### Query Parameters: 
+campaignId=string&date=string 
+
+#### Response:
 
 ```
 { "MDims": [{ "articleId": string, mDims: {direction_quality": float, ...}}] }
@@ -458,6 +578,10 @@ collected will include articles processed per second, latency, and error rate.
 Post-PoC, the system design will be revised to consider scaling, real-time
 monitoring and alerting, data persistence scalability, and system resilience. The design will also incorporate user
 feedback and address performance bottlenecks identified during the PoC phase.
+
+The current design does not deal with nodes that lag behind on information. For example, if a node goes offline for 
+a wihle and then comes back online, there is currently no mechanism to retrieve the missed updates. This would need 
+to be looked at in the future.
 
 ## Conclusion
 
