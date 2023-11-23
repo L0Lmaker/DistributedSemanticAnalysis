@@ -55,10 +55,38 @@ If we can obtain values between 0-1 for these **Metalanguage Dimensions** for ou
 sufficiently answer the question. The information may also be used to obtain plots of data.
 
 This analysis would traditionally happen via a manual review and labelling of articles, but it can also be done via 
-sentiment analysis algorithms (1 node system).
+sentiment analysis algorithms.
 
 Today, we can use a tool like GPT to analyse any form of text content. The naive approach would involve sequentially 
 retrieving the Metalanguage Dimension values and coming up with answer based on the values obtained.
+
+
+## Background and Related Work
+The paper titled "Extracting Knowledge from Wikipedia Articles through Distributed Semantic Analysis" [1] highlights the significance of semantic analysis in extracting meaning from language structures 
+and discusses the challenges of using large-scale data. It introduces Distributed Semantic Analysis (DSA), a novel model that combines distributed computing with semantic analysis, addressing scalability issues. Most of the times, the scalability issues are solved by using distributed systems. Some of the ways in which distributed systems can help solve scalability challenges are as follows:
+
+
+1. **Parallelism and Load Balancing:** Distributed systems enable parallel processing, where tasks are divided among 
+   multiple nodes, allowing them to be executed simultaneously. This helps in distributing the workload and increasing overall system performance. Distributing the incoming workload evenly across multiple nodes ensures that no single node becomes a bottleneck. Load balancing algorithms help in optimizing resource utilization and maintaining system responsiveness.
+2. **Data Partitioning:** Distributing data across multiple nodes prevents any single node from becoming a bottleneck 
+   for data access. Various partitioning strategies, such as sharding, help in dividing the data into smaller subsets. Physically partitioning and distributing the Web across millions of servers enables efficient handling of a vast number of documents, contributing to the scalability of the World Wide Web [2].
+3. **Data Replication:** Replicating data across multiple nodes ensures fault tolerance and improved read performance. 
+   This way, if one node fails, the data can still be accessed from other replicas. Improves system availability, balances the load between components, and enhances overall performance [2].
+4. **Caching:** Caching frequently accessed data in distributed systems can significantly reduce the load on the 
+   backend servers. Caching results in making a copy of a resource, generally in the proximity of the client accessing that resource [2].
+5. **Fault Tolerance:** Distributed systems often incorporate redundancy and replication to ensure fault tolerance. If 
+a node fails, another node can take over its responsibilities, minimizing the impact on the overall system.
+
+The solution of paper titled "Beyond Traditional NLP: A Distributed Solution for Optimizing Chat Processing" [3] is based on the Replicated Worker Paradigm, utilizing dynamically created tasks 
+during the execution of the master/coordinator process. Replicated workers, identical on each machine and assigned to separate physical processors, enable parallel decomposition of processing operations, enhancing fault tolerance. The architecture includes distributed work pools controlling task allocation to workers, with each work pool representing a collection of tasks awaiting execution by a single worker. Workers register to the master, await task assignments, and, upon completion, send results back to the master while retrieving new tasks from their work pools. The master signals worker termination after completing all tasks in the input folder. Communication relies on message queues for an event-driven approach, utilizing Apache's ActiveMQ message broker. Load balancing is ensured by the master assigning new tasks to workers as they become available, following a First Come First Served (FCFS) strategy. The solution is optimized not only for distributed computation but also for continuous monitoring and task resubmission in case of failure, contributing to a best-effort approach in chat processing tasks.
+
+These papers were written before GPT was made widely available and therefore we see the potential for extension in 
+this domain. The papers referenced primarily use word pairings in their analysis, but in our proposal, sentiments of 
+whole documents will be processed and analyzed.
+
+Taking inspirations from these papers, we are designing our distributed system with the help of load balancing and 
+paxos. The primary objective is to demonstrate improved processing speed and increased fault tolerance compared to a 
+synchronous single-node system. Our system introduces a novel approach to campaign creation, article processing, and result retrieval. By leveraging distributed nodes and a robust key-value store synchronized through the Paxos consensus mechanism, we aim to provide users with a highly efficient and resilient tool for analyzing a myriad of topics with ease.
 
 ### Our Proposal
 We propose a Distributed System that is able to process a large set of articles to answer questions that would
@@ -67,6 +95,12 @@ system aims to demonstrate improved processing speed and increased fault toleran
 synchronous single-node system. This design document outlines the design for this Distributed System.
 
 The project scope involves creating a distributed system capable of semantic analysis on a large dataset of text documents. Users can initiate campaigns with specific topics, and the system processes and analyzes each document to extract pre-defined sentiment metrics using GPT models. Meanwhile, the system ensures reliability and fault tolerance through a network of distributed nodes that synchronize data using the Paxos consensus algorithm. It is designed for scalability, allowing for additional nodes to manage larger workloads effectively. The system's technical infrastructure will use a key-value store for data persistence and a RESTful API for operations like creating campaigns and retrieving results. The initial scope does not include real-time processing capabilities, comprehensive data security measures, data backup strategies, or adherence to extensive regulatory compliance.
+#### Goals and Motivations
+
+1. Increased Fault tolerance
+2. Increased Processing Speeds
+
+Compared to traditional, synchronous systems (1 node).
 
 ## High Level Interface
 
@@ -87,20 +121,20 @@ graph LR
 
 ## Main Components
 
-| Components                                | Description                                                                                                                                                                                 |
-|-------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Client                                    | Initiates requests to the Distributed System.                                                                                                                                               |
-| Article <br/> /Document                   | The document being analyzed in the Distributed System. Can be used interchangeably.                                                                  <br/>                                  |
-| Load Balancer                             | Connects Clients to a Node that is ready to consume Requests                                                                                                                                |
-| Node                                      | Handles campaigns creation, article processing, and read requests. Initiates Paxos Consensus to share new information with all the other nodes.                                             |
-| Topic                                     | Research question that Clients want to find answers to.                                                                                                                                     |
-| Campaign                                  | An active topic that has been defined in the Distributed System. Each Campaign has an associated set of Metalanguage Dimensions.                                                            |
-| Metalanguage Dimensions                   | A set of parameters, that represents features that are being assessed about a <br/><br/>document. each MDim is expressed as a value between 0-1 to indicate the strength of that dimension. |
-| MDims Keys                                | Refers to the dimensions themselves and not the values.                                                                                                                                     |
-| MDims Values                              | Refers to the values for each key in the MDims Keys.                                                                                                                                        |
-| Filter                                    | The process via which an article is determined to be related to a research topic or not.                                                                                                    |
-| KV Store                                  | Where active campaigns are tracked and results of article processing is stored.                                                                                                             |
-| Paxos Consensus Mechanism                 | Orchestrates the synchronization of updates across nodes to ensure a consistent view of the KV Store.                                                                                       |
+| Components                       | Description                                                                                                                                                                       |
+|----------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Client/User                      | Initiates requests to the Distributed System.                                                                                                                                     |
+| Article <br/> /Document          | The document being analyzed in the Distributed System. Can be used interchangeably.                                                                  <br/>                        |
+| Load Balancer                    | Connects Clients to a Node that is ready to consume Requests                                                                                                                      |
+| Node                             | Handles campaigns creation, article processing, and read requests. Initiates Paxos Consensus to share new information with all the other nodes.                                   |
+| Topic                            | Research question that Clients want to find answers to.                                                                                                                           |
+| Campaign                         | An active topic that has been defined in the Distributed System. Each Campaign has an associated set of Metalanguage Dimensions.                                                  |
+| Metalanguage Dimensions          | A set of parameters, that represents features that are being assessed about a document. each MDim is expressed as a value between 0-1 to indicate the strength of that dimension. |
+| MDims Keys                       | Refers to the dimensions themselves and not the values.                                                                                                                           |
+| MDims Values                     | Refers to the values for each key in the MDims Keys.                                                                                                                              |
+| Filter                           | The process via which an article is determined to be related to a research topic or not.                                                                                          |
+| KV Store                         | Where active campaigns are tracked and results of article processing is stored.                                                                                                   |
+| Paxos Consensus Mechanism        | Orchestrates the synchronization of updates across nodes to ensure a consistent view of the KV Store.                                                                             |
 
 #### Metalanguage Dimensions Example:
 
@@ -179,15 +213,6 @@ The following is the schema of the KV store that each Node maintains:
 ```
 The KV store is synced between nodes via a Paxos Consensus Mechanism. It is triggered when new campaigns are being 
 created and when article processing results needs to be stored.
-
-
-// Add GPT on each node assumption
-
-## Properties of our System
-
-1. New MDim Values that are processed are consistent across nodes, providing a unified view.
-2. New MDim Values are stored in an append-only mode.
-3. Only if the document being processed
 
 ## Operations
 
@@ -327,7 +352,7 @@ flowchart TD
     ND((Node))
     
     QI --> |1. Get Information for <br/> campaignID, date| ND
-    ND --> |2. Request information| SharedKV[(Shared KV Store)]
+    ND --> |2. Request information| SharedKV[(KV Store)]
     SharedKV[(KV Store)] --> |3. Return information| ND
     ND --> |4. Return Result| QI
     
@@ -352,9 +377,9 @@ flowchart TD
     Q1 -->|Process Next Req| ND1((Node 1))
     Q2 -->|Process Next Req| ND2((Node 2))
     Q3 -->|Process Next Req| ND3((Node 3))
-    ND1 <--> |Store & Sync| SKV1[(Shared KV Store 1)]
-    ND2 <--> |Store & Sync| SKV2[(Shared KV Store 2)]
-    ND3 <--> |Store & Sync| SKV3[(Shared KV Store 3)]
+    ND1 <--> |Store & Sync| SKV1[(KV Store 1)]
+    ND2 <--> |Store & Sync| SKV2[(KV Store 2)]
+    ND3 <--> |Store & Sync| SKV3[(KV Store 3)]
 
     LB -.->|Reassign on Failure| MQ[Move Queue]
     MQ -.->|Update Allocation| LB
@@ -418,19 +443,6 @@ sequenceDiagram
     Note right of L: Learner updates KV Store<br/>with MDims
 ```
 
-### Handling Failures
-
-* Node Failure
-    * If a node fails during the consensus process, the client should be notified of failure so they may try again
-
-* Proposal Rejection
-    * If a proposal is rejected during the Prepare or Accept phases, the proposer must attempt to reach 3 attempts 
-      before failure
-
-* Network Partitions
-    * Paxos is designed to tolerate network partitions to a certain extent. However, prolonged partitions may require
-      additional mechanisms for reconciliation.
-
 ## Networking and Communication
 
 The system will use HTTP/REST for communication between nodes due to its simplicity and ease of implementation. Each
@@ -442,6 +454,72 @@ MDims.
 The system will use a round-robin algorithm implemented within the Load Balancer to distribute incoming article
 processing requests evenly across available nodes. The Load Balancer will run periodic Heartbeat checks to all nodes 
 to obtain status of nodes. If nodes do not respond, the process queue will be moved to a different active node.
+
+### Load Balancer Snapshotting
+
+In order to enhance fault tolerance and system resilience, particularly concerning the Load Balancer component, we introduce a Load Balancer Snapshotting mechanism. This mechanism is responsible for the periodic saving of the Load Balancer's state, which includes the queue statuses and any other relevant information. This persisted state will allow the Load Balancer to be accurately restored in case of a failure.
+
+#### Snapshotting Strategy
+
+The Load Balancer’s snapshotting feature is designed with the following key considerations:
+
+1. **Snapshot Frequency:** The system will take periodic snapshots of the Load Balancer's state, including the current status of the queues (e.g., items waiting for processing, prospective items, etc.) and the corresponding metadata (like the timestamp, node allocations, etc.), at a frequency that balances performance and recovery requirements.
+
+2. **Atomicity:** Each snapshot operation must be atomic to ensure either a full snapshot is saved or none at all, preventing partial or corrupt data snapshots.
+
+3. **Concurrency Control:** Snapshot operations will be managed such that they do not interfere with the active routing of requests or the normal operation of the Load Balancer.
+
+4. **Durability:** Snapshots will be persisted in a durable storage system that can survive system and network failures, ensuring that we can recover from Load Balancer failures swiftly.
+
+5. **Snapshot Recovery:** On detecting a Load Balancer restart, the system will automatically retrieve the last saved snapshot and restore the Load Balancer to the most recent consistent state.
+
+#### Snapshotting Process
+
+The snapshotting process will involve the following stages:
+
+1. **Queue Freezing:** Briefly suspend the Load Balancer's queue allocations to take a consistent snapshot.
+
+2. **State Aggregation:** Collect the statuses of all processing and pending queues from the Load Balancer.
+
+3. **Persistence:** Atomically write the collected state data into durable storage, noting the snapshot timestamp.
+
+4. **Queue Resumption:** Resume the Load Balancer's normal operation, minimizing the pause's impact on request handling.
+
+5. **Log Management:** Maintain logs detailing each snapshot operation to aid in problem diagnosis and system audits.
+
+#### Failure Recovery
+
+In the event of a Load Balancer failure, the system will:
+
+1. Detect the failure and initiate the Load Balancer's restart mechanism.
+
+2. Retrieve the last consistent snapshot of the Load Balancer state from durable storage.
+
+3. Restore queue statuses and any other configurations from the snapshot to the Load Balancer.
+
+4. Resume normal Load Balancer operations, redistributing requests to available nodes as per the restored state.
+
+### Load Balancer Snapshot Diagram
+
+To visualize the concept, below is a diagram illustrating the snapshotting process:
+
+```mermaid
+flowchart TD
+    LB[Load Balancer] --> |Periodic Snapshot Trigger| PAUSE[Queue Freezing]
+    PAUSE --> AGGR[State Aggregation]
+    AGGR -->|Pending & Processing Queues| P[Snapshot Persistence]
+    P -->|Write to Durable Storage| DS[(Durable Storage)]
+    P --> LOG[Logging Mechanism]
+    P --> RESUME[Queue Resumption]
+    DS -->|On Failure| R[Recovery Mechanism]
+    R -->|Retrieve Last Snapshot| LB
+    classDef storage fill:#f96;
+    class DS storage;
+```
+
+This diagram shows an example flow of the Load Balancer snapshotting process, from initiation to persistent storage and recovery mechanism.
+
+By implementing Load Balancer Snapshotting, we enhance the robustness of our Distributed Semantic Analysis/Monitoring System, ensuring minimal downtime and faster recovery times in the event of Load Balancer failures.
 
 ## Storage and Log Management
 
@@ -463,9 +541,10 @@ sequenceDiagram
     LB ->> N: Assign Article Processing
     N ->> G: Send Content for Analysis
     G -->> N: Return MDim Values
+    N -->> P: Share Update
+    P -->> N: Update Success
     N ->> J: Store Result (append)
-    J -->> P: Share Update
-    P -->> J: Synchronize State
+    N ->> A: Respond to Client
 ```
 
 This sequence diagram illustrates the information flow from when a new article is queued to the MDims being stored 
@@ -491,6 +570,33 @@ the Flower Moon", the MDim Keys that GPT may generate is the following:
 
 For each article we process in this campaign, we will need a value between 0-1 to describe the effectiveness of the 
 movie to answer our original research question.
+
+### Note on System Messages
+
+For those unfamiliar with GPT, we are able to define a system message to GPT that will ensure it responds the way we 
+expect it to. For example, during campaign creation, we will need to define a system message such that, when given a 
+research topic, the return value from GPT is in a form we can process.
+
+### System Message example
+```
+This is a question I want to answer from a set of articles:
+
+<insert research topic here>
+
+If I had an LLM trying to answer this question by providing a [-1, 1] range value across a few dimensions, what would those dimensions be?
+
+For example:
+if the question was “What is the overall impression of Donald Trump in my documents?”
+
+the dimensions may be: [“satisfactionWithPresidency”, “confidenceInTrump”, “futureOutlook”]
+
+Give me 5 in camelCase and as a JSON array
+```
+
+Similarly we can define a system message to take an article as input and return the set of MDim Values.
+
+We also assume that each node has its own independent GPT worker for this design.
+
 
 ## API Endpoints
 ### POST /createCampaign
@@ -552,6 +658,34 @@ campaignId=string&date=string
 { "MDims": [{ "articleId": string, mDims: {direction_quality": float, ...}}] }
 ```
 
+# Read-Repair Based State Reconciliation
+
+## Introduction
+
+To ensure that each node has the most up-to-date information before handling any specific campaign or article-related actions, our system will implement a read-repair mechanism. When a node receives a request referencing a `campaignId` or `articleId`, it will query other nodes to verify whether it has the latest information. If it detects that it lacks certain updates, it will reconcile its state by fetching the missing data.
+
+## Process Overview
+
+### Step 1: Request Receipt and Initial Check
+
+- When a node (`RequestingNode`) receives a request that involves a `campaignId` or `articleId`, it performs an initial check against its local KV Store.
+
+### Step 2: Querying Other Nodes
+- If the `campaignId` or `articleId` is unknown or if there is any indication that an update might be missing (e.g., inconsistency in related meta-information), the `RequestingNode` sends a query to a subset or all other nodes to check for the most recent state.
+  
+### Step 3: Fetching and Applying Missing Updates
+- Based on responses from other nodes, the `RequestingNode` identifies if there are any updates it has missed.
+- The `RequestingNode` fetches the missing data and applies it in the correct order to ensure a consistent state.
+
+### Step 4: Execution or Forwarding of the Request
+- Once the `RequestingNode` is confident that its state is up-to-date, it can proceed to execute the original request.
+- If the request is read-related, and the node is still synchronizing, it may forward the read request to another node that has confirmed that it has the latest state.
+
+### Step 5: Client Notification
+- During this process, if there is any notable delay or failure, the `RequestingNode` should inform the client of the status, possibly suggesting a retry after some time.
+
+By incorporating this read-repair based approach, nodes are reactive and self-healing, asking for the latest information only when necessary. This method reduces overhead, as full state synchronization is triggered by actual demand rather than at regular intervals or by detecting a global versioning discrepancy.
+
 ## Performance Benchmarking
 
 Performance benchmarking will be carried out using a custom-built tool to simulate article streaming and measure
@@ -586,7 +720,15 @@ collected will include articles processed per second, latency, and error rate.
 5. **Invalid Article Processing Request:**
     - The system needs to handle cases where an article processing request is invalid or contains incorrect parameters.
 
+<<<<<<< HEAD
     **Mitigations:** - Respond to client with failures
+=======
+6. **OPENAI API Connection Failure:**
+    - Failures in establishing a connection to the OPENAI API during the article processing phase could occur.
+
+8. **Consensus Process Failure:**
+    - Failures during the Paxos consensus process may prevent the synchronization of updates across nodes.
+>>>>>>> origin/main
 
 9. **Load Balancer Failure:**
     - Issues with the load balancer may impact the even distribution of article processing requests across nodes.
