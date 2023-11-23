@@ -20,25 +20,6 @@ If I were to ask you a question, "What is the public perception of company X thr
 of Articles, Social Media Posts, and YouTube video transcripts (published in 2023), how would we go about answering that
 question?
 
-## Background and Related Work
-The paper [1] highlights the significance of semantic analysis in extracting meaning from language structures and discusses the challenges of using large-scale data. It introduces Distributed Semantic Analysis (DSA), a novel model that combines distributed computing with semantic analysis, addressing scalability issues. Most of the times, the scalability issues are solved by using distributed systems. Some of the ways in which distributed systems can help solve scalability challenges are as follows:
-
-    1. Parallelism and Load Balancing: Distributed systems enable parallel processing, where tasks are divided among multiple nodes, allowing them to be executed simultaneously. This helps in distributing the workload and increasing overall system performance. Distributing the incoming workload evenly across multiple nodes ensures that no single node becomes a bottleneck. Load balancing algorithms help in optimizing resource utilization and maintaining system responsiveness.
-
-    2. Data Partitioning: Distributing data across multiple nodes prevents any single node from becoming a bottleneck for data access. Various partitioning strategies, such as sharding, help in dividing the data into smaller subsets. Physically partitioning and distributing the Web across millions of servers enables efficient handling of a vast number of documents, contributing to the scalability of the World Wide Web [2].
-    
-    3. Data Replication: Replicating data across multiple nodes ensures fault tolerance and improved read performance. This way, if one node fails, the data can still be accessed from other replicas. Improves system availability, balances the load between components, and enhances overall performance [2].
-
-    4. Caching: Caching frequently accessed data in distributed systems can significantly reduce the load on the backend servers. Caching results in making a copy of a resource, generally in the proximity of the client accessing that resource [2].
-
-    5. Fault Tolerance: Distributed systems often incorporate redundancy and replication to ensure fault tolerance. If a node fails, another node can take over its responsibilities, minimizing the impact on the overall system.
-
-After solving the scalability issues of a system, the next step is to design the distributed system. The solution of paper [3] is based on the Replicated Worker Paradigm, utilizing dynamically created tasks during the execution of the master/coordinator process. Replicated workers, identical on each machine and assigned to separate physical processors, enable parallel decomposition of processing operations, enhancing fault tolerance. The architecture includes distributed work pools controlling task allocation to workers, with each work pool representing a collection of tasks awaiting execution by a single worker. Workers register to the master, await task assignments, and, upon completion, send results back to the master while retrieving new tasks from their work pools. The master signals worker termination after completing all tasks in the input folder. Communication relies on message queues for an event-driven approach, utilizing Apache's ActiveMQ message broker. Load balancing is ensured by the master assigning new tasks to workers as they become available, following a First Come First Served (FCFS) strategy. The solution is optimized not only for distributed computation but also for continuous monitoring and task resubmission in case of failure, contributing to a best-effort approach in chat processing tasks.
-
-Moreover, a very important concept of distributed systems is the "Paxos Concensus Process". Leslie Lamport introduced the Paxos algorithm in the paper called "Paxos Made Simple" [4], which is a family of protocols designed to achieve consensus in a distributed system. The Paxos algorithm addresses the problem of reaching agreement among a group of distributed processes or nodes, even if some of them may fail or deliver messages out of order. The algorithm ensures that a group of nodes can agree on a single value, even in the presence of failures, by using a process of proposal and acceptance.
-
-Taking inspirations from these papers, we are designing our distributed system with the help of load balancing. The primary objective is to demonstrate improved processing speed and increased fault tolerance compared to a synchronous single-node system. Our system introduces a novel approach to campaign creation, article processing, and result retrieval. By leveraging distributed nodes and a robust key-value store synchronized through the Paxos consensus mechanism, we aim to provide users with a highly efficient and resilient tool for analyzing a myriad of topics with ease.
-
 ### Naive Approach
 In order to monitor a topic of interest, we need to observe information related to the topic across a few 
 parameters or dimensions. If we are to stick
@@ -94,7 +75,6 @@ traditionally require a large number of human operators labelling articles manua
 system aims to demonstrate improved processing speed and increased fault tolerance by using a distributed approach compared to a
 synchronous single-node system. This design document outlines the design for this Distributed System.
 
-The project scope involves creating a distributed system capable of semantic analysis on a large dataset of text documents. Users can initiate campaigns with specific topics, and the system processes and analyzes each document to extract pre-defined sentiment metrics using GPT models. Meanwhile, the system ensures reliability and fault tolerance through a network of distributed nodes that synchronize data using the Paxos consensus algorithm. It is designed for scalability, allowing for additional nodes to manage larger workloads effectively. The system's technical infrastructure will use a key-value store for data persistence and a RESTful API for operations like creating campaigns and retrieving results. The initial scope does not include real-time processing capabilities, comprehensive data security measures, data backup strategies, or adherence to extensive regulatory compliance.
 #### Goals and Motivations
 
 1. Increased Fault tolerance
@@ -720,27 +700,17 @@ collected will include articles processed per second, latency, and error rate.
 5. **Invalid Article Processing Request:**
     - The system needs to handle cases where an article processing request is invalid or contains incorrect parameters.
 
-<<<<<<< HEAD
-    **Mitigations:** - Respond to client with failures
-=======
-6. **OPENAI API Connection Failure:**
-    - Failures in establishing a connection to the OPENAI API during the article processing phase could occur.
-
-8. **Consensus Process Failure:**
-    - Failures during the Paxos consensus process may prevent the synchronization of updates across nodes.
->>>>>>> origin/main
-
-9. **Load Balancer Failure:**
+6. **Load Balancer Failure:**
     - Issues with the load balancer may impact the even distribution of article processing requests across nodes.
 
     **Mitigations:** - A system that periodically takes snapshots of the load balancing state and persists the information <br> - In the event of a load balancer failure, the system can refer to the latest snapshot to understand the state prior to the failure and resume even distribution from the last known point, ensuring continued stability and efficiency in handling requests.
 
-10. **JSON KV Store Failure:**
+7. **JSON KV Store Failure:**
     - Failures in the JSON KV store, where state data is maintained, could lead to data inconsistencies.
 
     **Mitigations:** - A protocol where information is shared only after successful processing and storage in the JSON KV store. <br> - By adopting this strategy, the system ensures that data inconsistencies are minimized, as shared information reflects a state that has been successfully updated in the KV store, reducing the impact of potential failures on overall data integrity.
 
-12. **Unavailability of GPT:**
+8. **Unavailability of GPT:**
     - Single point of failure since the sentiment is calculated based on responses from the GPT. But we are assuming that each of the nodes will have their own custom GPT model with robust error handling.
 
     - Failures in establishing a connection to the OPENAI API during the article processing phase could occur.
