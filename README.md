@@ -68,9 +68,10 @@ synchronous single-node system. This design document outlines the design for thi
 
 #### Description
 The user is able to take 3 different actions.
+
 1. Campaign Creation
 2. Article Processing
-3. Read Requests
+3. Read Results
 
 ```mermaid
 graph LR
@@ -82,34 +83,40 @@ graph LR
 
 ## Main Components
 
-| Components                | Description                                                                                                                                                                                 |
-|---------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Client                    | Initiates requests to the Distributed System.                                                                                                                                               |
-| Article/Document          | The document being analyzed in the Distributed System. Can be used interchangeably.                                                                  <br/>                                  |
-| Load Balancer             | Connects Clients to a Node that is ready to consume Requests                                                                                                                                |
-| Node                      | Handles campaigns creation, article processing, and read requests. Initiates Paxos Consensus to share new information with all the other nodes.                                             |
-| Topic                     | Research question that Clients want to find answers to.                                                                                                                                     |
-| Campaign                  | An active topic that has been defined in the Distributed System. Each Campaign has an associated set of Metalanguage Dimensions.                                                            |
-| Metalanguage Dimensions   | A set of parameters, that represents features that are being assessed about a <br/><br/>document. each MDim is expressed as a value between 0-1 to indicate the strength of that dimension. |
-| MDims Keys                | Refers to the dimensions themselves and not the values.                                                                                                                                     |
-| MDims Values              | Refers to the values for each key in the MDims Keys.                                                                                                                                        |
-| Filter                    | The process via which an article is determined to be related to a research topic or not.                                                                                                    |
-| KV Store                  | Where active campaigns are tracked and results of article processing is stored.                                                                                                             |
-| Paxos Consensus Mechanism | Orchestrates the synchronization of updates across nodes to ensure a consistent view of the KV Store.                                                                                       |
+| Components                                | Description                                                                                                                                                                                 |
+|-------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Client                                    | Initiates requests to the Distributed System.                                                                                                                                               |
+| Article <br/> /Document                   | The document being analyzed in the Distributed System. Can be used interchangeably.                                                                  <br/>                                  |
+| Load Balancer                             | Connects Clients to a Node that is ready to consume Requests                                                                                                                                |
+| Node                                      | Handles campaigns creation, article processing, and read requests. Initiates Paxos Consensus to share new information with all the other nodes.                                             |
+| Topic                                     | Research question that Clients want to find answers to.                                                                                                                                     |
+| Campaign                                  | An active topic that has been defined in the Distributed System. Each Campaign has an associated set of Metalanguage Dimensions.                                                            |
+| Metalanguage Dimensions                   | A set of parameters, that represents features that are being assessed about a <br/><br/>document. each MDim is expressed as a value between 0-1 to indicate the strength of that dimension. |
+| MDims Keys                                | Refers to the dimensions themselves and not the values.                                                                                                                                     |
+| MDims Values                              | Refers to the values for each key in the MDims Keys.                                                                                                                                        |
+| Filter                                    | The process via which an article is determined to be related to a research topic or not.                                                                                                    |
+| KV Store                                  | Where active campaigns are tracked and results of article processing is stored.                                                                                                             |
+| Paxos Consensus Mechanism                 | Orchestrates the synchronization of updates across nodes to ensure a consistent view of the KV Store.                                                                                       |
 
-#### Metalanguage Dimensions Example
+#### Metalanguage Dimensions Example:
 
 If we create a campaign with the topic: "What is the impression of Bitcoin in my documents?"
 
 The MDims Keys may be the following:
-```
-["generalAttitudeTowardsBitcoin", "trustInBitcoin", "investmentPotential", "futureOutlookOfBitcoin", "usabilityOfBitcoin"]
+```json
+[
+  "generalAttitudeTowardsBitcoin",
+  "trustInBitcoin",
+  "investmentPotential",
+  "futureOutlookOfBitcoin",
+  "usabilityOfBitcoin"
+]
 ```
 
 These MDim keys are automatically obtained via GPT when a campaign is created. When an article is processed the MDim 
 Values are obtained via GPT as well.
 
-#### Filters Example
+#### Filters Example:
 
 Not all documents that are processed for a given campaign may actually be related to the campaign topic. For example,
 if my research topic was about Bitcoin and the document I pass is about Donald Trump, it is probably not related to 
@@ -281,7 +288,7 @@ We assume that the Load Balancer has assigned us a Node that will respond to req
 
 Note that the two nodes in the diagram refer to the same node. It is split up for readability.
 ```mermaid
-flowchart LR
+flowchart TD
     DOC((New <br/> Document))
     NODE((Node))
     NODE2((Node))
@@ -292,13 +299,13 @@ flowchart LR
     DOC --> |1. Send To| NODE
     NODE --> |2. Run Filter Check| GPT_FILTER
     GPT_FILTER --> |3. Response| NODE 
-    NODE --> FILT_CHECK
+    NODE --> |4. Run Filter Check|FILT_CHECK
     FILT_CHECK -->|If Passes Check| NODE2
-    NODE2 --> |4. Generate MDim Values| GPT_MDIMS
-    GPT_MDIMS --> |5. Response| NODE2
+    NODE2 --> |5. Generate MDim Values| GPT_MDIMS
+    GPT_MDIMS --> |6. Response| NODE2
     FILT_CHECK -->|If Fails Check| END[End Process <br/> and <br/> Notify Client]
-    NODE2 --> |6. Store MDim Values|SharedKV[(KV Store)]
-    NODE2 --> |7. Respond to Client| DOC
+    NODE2 --> |7. Store MDim Values|SharedKV[(KV Store)]
+    NODE2 --> |8. Respond to Client| DOC
 
     classDef filtered fill:#f96;
     class END filtered;
@@ -330,7 +337,7 @@ receive the missed information from the other nodes. Note that the read speed wo
 ### Load Balancer
 For all three user actions.
 ```mermaid
-flowchart LR
+flowchart TD
     REQ[Incoming Requests] --> LB[Load Balancer]
     HB[Heartbeat Monitor] -.->|Heartbeat Checks| N1[Node 1]
     HB -.->|Heartbeat Checks| N2[Node 2]
