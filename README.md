@@ -20,6 +20,23 @@ If I were to ask you a question, "What is the public perception of company X thr
 of Articles, Social Media Posts, and YouTube video transcripts (published in 2023), how would we go about answering that
 question?
 
+## Background and Related Work
+The paper [1] highlights the significance of semantic analysis in extracting meaning from language structures and discusses the challenges of using large-scale data. It introduces Distributed Semantic Analysis (DSA), a novel model that combines distributed computing with semantic analysis, addressing scalability issues. Most of the times, the scalability issues are solved by using distributed systems. Some of the ways in which distributed systems can help solve scalability challenges are as follows:
+
+    1. Parallelism and Load Balancing: Distributed systems enable parallel processing, where tasks are divided among multiple nodes, allowing them to be executed simultaneously. This helps in distributing the workload and increasing overall system performance. Distributing the incoming workload evenly across multiple nodes ensures that no single node becomes a bottleneck. Load balancing algorithms help in optimizing resource utilization and maintaining system responsiveness.
+
+    2. Data Partitioning: Distributing data across multiple nodes prevents any single node from becoming a bottleneck for data access. Various partitioning strategies, such as sharding, help in dividing the data into smaller subsets. Physically partitioning and distributing the Web across millions of servers enables efficient handling of a vast number of documents, contributing to the scalability of the World Wide Web [2].
+    
+    3. Data Replication: Replicating data across multiple nodes ensures fault tolerance and improved read performance. This way, if one node fails, the data can still be accessed from other replicas. Improves system availability, balances the load between components, and enhances overall performance [2].
+
+    4. Caching: Caching frequently accessed data in distributed systems can significantly reduce the load on the backend servers. Caching results in making a copy of a resource, generally in the proximity of the client accessing that resource [2].
+
+    5. Fault Tolerance: Distributed systems often incorporate redundancy and replication to ensure fault tolerance. If a node fails, another node can take over its responsibilities, minimizing the impact on the overall system.
+
+After solving the scalability issues of a system, the next step is to design the distributed system. The solution of paper [3] is based on the Replicated Worker Paradigm, utilizing dynamically created tasks during the execution of the master/coordinator process. Replicated workers, identical on each machine and assigned to separate physical processors, enable parallel decomposition of processing operations, enhancing fault tolerance. The architecture includes distributed work pools controlling task allocation to workers, with each work pool representing a collection of tasks awaiting execution by a single worker. Workers register to the master, await task assignments, and, upon completion, send results back to the master while retrieving new tasks from their work pools. The master signals worker termination after completing all tasks in the input folder. Communication relies on message queues for an event-driven approach, utilizing Apache's ActiveMQ message broker. Load balancing is ensured by the master assigning new tasks to workers as they become available, following a First Come First Served (FCFS) strategy. The solution is optimized not only for distributed computation but also for continuous monitoring and task resubmission in case of failure, contributing to a best-effort approach in chat processing tasks.
+
+Taking inspirations from these papers, we are designing our distributed system with the help of load balancing. The primary objective is to demonstrate improved processing speed and increased fault tolerance compared to a synchronous single-node system. Our system introduces a novel approach to campaign creation, article processing, and result retrieval. By leveraging distributed nodes and a robust key-value store synchronized through the Paxos consensus mechanism, we aim to provide users with a highly efficient and resilient tool for analyzing a myriad of topics with ease.
+
 ### Naive Approach
 In order to monitor a topic of interest, we need to observe information related to the topic across a few 
 parameters or dimensions. If we are to stick
@@ -570,6 +587,9 @@ collected will include articles processed per second, latency, and error rate.
 11. **Campaign ID Generation Failure:**
     - Failure to generate a unique campaign ID during campaign creation could lead to conflicts.
 
+12. **Unavailability of GPT:**
+    - Single point of failure since the sentiment is calculated based on responses from the GPT. But we are assuming that each of the nodes will have their own custom GPT model with robust error handling.
+
 12. **Article Content Extraction Failure:**
     - Errors in extracting MDims from the article content during the article processing phase.
 
@@ -591,3 +611,10 @@ enhanced based on future requirements and findings.
 
 Moreover, this design can be made more generic to perform a wider variety of actions across large natural language 
 datasets. 
+
+## References
+[1] Nguyen Trung Hieu, Mario Di Francesco, and Antti Ylä-Jääski. 2013. Extracting Knowledge from Wikipedia Articles through Distributed Semantic Analysis. In Proceedings of the 13th International Conference on Knowledge Management and Knowledge Technologies (i-Know '13). Association for Computing Machinery, New York, NY, USA, Article 6, 1–8. https://doi.org/10.1145/2494188.2494195
+
+[2] van Steen, M., Tanenbaum, A.S. A brief introduction to distributed systems. Computing 98, 967–1009 (2016). https://doi.org/10.1007/s00607-016-0508-7
+
+[3] Dascalu, Mihai & Dobre, Ciprian & Trausan-Matu, Stefan & Cristea, Valentin. (2011). Beyond Traditional NLP: A Distributed Solution for Optimizing Chat Processing - Automatic Chat Assessment Using Tagged Latent Semantic Analysis. Proceedings - 2011 10th International Symposium on Parallel and Distributed Computing, ISPDC 2011. 133-138. 10.1109/ISPDC.2011.28. 
