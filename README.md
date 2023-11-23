@@ -35,6 +35,8 @@ The paper [1] highlights the significance of semantic analysis in extracting mea
 
 After solving the scalability issues of a system, the next step is to design the distributed system. The solution of paper [3] is based on the Replicated Worker Paradigm, utilizing dynamically created tasks during the execution of the master/coordinator process. Replicated workers, identical on each machine and assigned to separate physical processors, enable parallel decomposition of processing operations, enhancing fault tolerance. The architecture includes distributed work pools controlling task allocation to workers, with each work pool representing a collection of tasks awaiting execution by a single worker. Workers register to the master, await task assignments, and, upon completion, send results back to the master while retrieving new tasks from their work pools. The master signals worker termination after completing all tasks in the input folder. Communication relies on message queues for an event-driven approach, utilizing Apache's ActiveMQ message broker. Load balancing is ensured by the master assigning new tasks to workers as they become available, following a First Come First Served (FCFS) strategy. The solution is optimized not only for distributed computation but also for continuous monitoring and task resubmission in case of failure, contributing to a best-effort approach in chat processing tasks.
 
+Moreover, a very important concept of distributed systems is the "Paxos Concensus Process". Leslie Lamport introduced the Paxos algorithm in the paper called "Paxos Made Simple" [4], which is a family of protocols designed to achieve consensus in a distributed system. The Paxos algorithm addresses the problem of reaching agreement among a group of distributed processes or nodes, even if some of them may fail or deliver messages out of order. The algorithm ensures that a group of nodes can agree on a single value, even in the presence of failures, by using a process of proposal and acceptance.
+
 Taking inspirations from these papers, we are designing our distributed system with the help of load balancing. The primary objective is to demonstrate improved processing speed and increased fault tolerance compared to a synchronous single-node system. Our system introduces a novel approach to campaign creation, article processing, and result retrieval. By leveraging distributed nodes and a robust key-value store synchronized through the Paxos consensus mechanism, we aim to provide users with a highly efficient and resilient tool for analyzing a myriad of topics with ease.
 
 ### Naive Approach
@@ -63,6 +65,8 @@ We propose a Distributed System that is able to process a large set of articles 
 traditionally require a large number of human operators labelling articles manually in order to produce an answer. The
 system aims to demonstrate improved processing speed and increased fault tolerance by using a distributed approach compared to a
 synchronous single-node system. This design document outlines the design for this Distributed System.
+
+The project scope involves creating a distributed system capable of semantic analysis on a large dataset of text documents. Users can initiate campaigns with specific topics, and the system processes and analyzes each document to extract pre-defined sentiment metrics using GPT models. Meanwhile, the system ensures reliability and fault tolerance through a network of distributed nodes that synchronize data using the Paxos consensus algorithm. It is designed for scalability, allowing for additional nodes to manage larger workloads effectively. The system's technical infrastructure will use a key-value store for data persistence and a RESTful API for operations like creating campaigns and retrieving results. The initial scope does not include real-time processing capabilities, comprehensive data security measures, data backup strategies, or adherence to extensive regulatory compliance.
 
 ## High Level Interface
 
@@ -554,51 +558,50 @@ Performance benchmarking will be carried out using a custom-built tool to simula
 throughput across both the distributed system and a synchronous single-node reference configuration. The metrics
 collected will include articles processed per second, latency, and error rate.
 
-## Potential System Failures
+## Potential System Risks/Challenges
 
 1. **Node Failure:**
     - A node may fail during various stages, such as campaign creation, article processing, or the Paxos consensus
       process.
 
+      **Mitigations**: - Heartbeat checks for timely detection and automated response to unresponsive nodes, while optimizing system resilience through load balancing, redundancy strategies, and replicating critical components
+
 2. **Proposal Rejection:**
     - Proposals during the Paxos process may be rejected, leading to the need for the proposer to adapt and propose a
       new update.
 
+      **Mitigations:** - Retry till sequence number obtained <br> - A timeout mechanism to avoid potential deadlocks
+ 
 3. **Network Partitions:**
-    - Network partitions may occur, disrupting communication between nodes. Paxos is designed to tolerate partitions to
-      some extent, but prolonged partitions may pose challenges.
+    - Network partitions may occur, disrupting communication between nodes.
+
+      **Mitigations:** - Paxos is designed to tolerate partitions to some extent, but prolonged partitions may pose challenges.
 
 4. **Duplicate Operations:**
     - Nodes must ensure that duplicate operations are not processed. This is critical during the Paxos consensus process
       and in handling article processing requests.
 
+      **Mitigations:** - An internal Key-Value (KV) store that is consulted before processing an operation to check for the presence of a previous occurrence. <br> - If the operation is found in the KV store, indicating a duplicate, the node can discard or appropriately handle the redundant request, ensuring that each operation is processed only once in both the Paxos consensus process and article processing.
+
 5. **Invalid Article Processing Request:**
     - The system needs to handle cases where an article processing request is invalid or contains incorrect parameters.
 
-6. **OPENAI API Connection Failure:**
-    - Failures in establishing a connection to the OPENAI API during the article processing phase could occur.
-
-7. **MDim Retrieval Failure:**
-    - Issues in retrieving MDims or counting processed values for a specified date may lead to failures in the
-      aggregation process.
-
-8. **Consensus Process Failure:**
-    - Failures during the Paxos consensus process may prevent the synchronization of updates across nodes.
+    **Mitigations:** - Respond to client with failures
 
 9. **Load Balancer Failure:**
     - Issues with the load balancer may impact the even distribution of article processing requests across nodes.
 
+    **Mitigations:** - A system that periodically takes snapshots of the load balancing state and persists the information <br> - In the event of a load balancer failure, the system can refer to the latest snapshot to understand the state prior to the failure and resume even distribution from the last known point, ensuring continued stability and efficiency in handling requests.
+
 10. **JSON KV Store Failure:**
     - Failures in the JSON KV store, where state data is maintained, could lead to data inconsistencies.
 
-11. **Campaign ID Generation Failure:**
-    - Failure to generate a unique campaign ID during campaign creation could lead to conflicts.
+    **Mitigations:** - A protocol where information is shared only after successful processing and storage in the JSON KV store. <br> - By adopting this strategy, the system ensures that data inconsistencies are minimized, as shared information reflects a state that has been successfully updated in the KV store, reducing the impact of potential failures on overall data integrity.
 
 12. **Unavailability of GPT:**
     - Single point of failure since the sentiment is calculated based on responses from the GPT. But we are assuming that each of the nodes will have their own custom GPT model with robust error handling.
 
-12. **Article Content Extraction Failure:**
-    - Errors in extracting MDims from the article content during the article processing phase.
+    - Failures in establishing a connection to the OPENAI API during the article processing phase could occur.
 
 ## Future Considerations
 
@@ -606,9 +609,15 @@ Post-PoC, the system design will be revised to consider scaling, real-time
 monitoring and alerting, data persistence scalability, and system resilience. The design will also incorporate user
 feedback and address performance bottlenecks identified during the PoC phase.
 
-The current design does not deal with nodes that lag behind on information. For example, if a node goes offline for 
-a wihle and then comes back online, there is currently no mechanism to retrieve the missed updates. This would need 
-to be looked at in the future.
+Moving forward, additional operations such as deleting and updating will be seamlessly integrated into the system's functionality:
+
+- Deleting Operations:
+
+  A secure and efficient deletion mechanism will be introduced, allowing users to remove outdated or unnecessary data. This feature will be implemented with careful consideration for data integrity and user access permissions.
+
+- Updating Operations:
+
+  The system will incorporate robust updating capabilities, enabling users to modify existing data as needed. This includes implementing version control mechanisms to track changes and ensuring seamless integration with the overall data processing workflow.
 
 ## Conclusion
 
@@ -620,8 +629,10 @@ Moreover, this design can be made more generic to perform a wider variety of act
 datasets. 
 
 ## References
-[1] Nguyen Trung Hieu, Mario Di Francesco, and Antti Ylä-Jääski. 2013. Extracting Knowledge from Wikipedia Articles through Distributed Semantic Analysis. In Proceedings of the 13th International Conference on Knowledge Management and Knowledge Technologies (i-Know '13). Association for Computing Machinery, New York, NY, USA, Article 6, 1–8. https://doi.org/10.1145/2494188.2494195
+[1] Hieu, N. T., Francesco, M. D., and Ylä-Jääski, A. 2013. Extracting Knowledge from Wikipedia Articles through Distributed Semantic Analysis. In Proceedings of the 13th International Conference on Knowledge Management and Knowledge Technologies (i-Know '13). Association for Computing Machinery, New York, NY, USA, Article 6, 1–8. https://doi.org/10.1145/2494188.2494195
 
 [2] van Steen, M., Tanenbaum, A.S. A brief introduction to distributed systems. Computing 98, 967–1009 (2016). https://doi.org/10.1007/s00607-016-0508-7
 
 [3] Dascalu, Mihai & Dobre, Ciprian & Trausan-Matu, Stefan & Cristea, Valentin. (2011). Beyond Traditional NLP: A Distributed Solution for Optimizing Chat Processing - Automatic Chat Assessment Using Tagged Latent Semantic Analysis. Proceedings - 2011 10th International Symposium on Parallel and Distributed Computing, ISPDC 2011. 133-138. 10.1109/ISPDC.2011.28. 
+
+[4] Lamport, L. (2001). Paxos Made Simple.
