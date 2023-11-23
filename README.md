@@ -3,16 +3,29 @@
 ## Table of Contents
 
 - [Introduction](#introduction)
+- [Background and Related Work](#background-and-related-work)
+- [Our Proposal](#our-proposal)
+- [High Level Interface](#high-level-interface)
+- [Main Components](#main-components)
+- [KV Store Schema](#kv-store-schema)
+- [Operations](#operations)
 - [System Architecture](#system-architecture)
+- [Information Pipeline](#information-pipeline)
+- [Load Balancer](#load-balancer)
 - [Node Design](#node-design)
+- [Paxos Consensus Process](#paxos-consensus-process)
 - [Networking and Communication](#networking-and-communication)
 - [Load Balancing Strategy](#load-balancing-strategy)
+- [Load Balancer Snapshotting](#load-balancer-snapshotting)
 - [Storage and Log Management](#storage-and-log-management)
-- [Metadata Extraction](#metadata-extraction)
+- [GPT Usage](#gpt-usage)
 - [API Endpoints](#api-endpoints)
+- [Read-Repair Based State Reconciliation](#read-repair-based-state-reconciliation)
 - [Performance Benchmarking](#performance-benchmarking)
+- [Potential System Risks/Challenges](#potential-system-riskschallenges)
 - [Future Considerations](#future-considerations)
-- [Story Point Estimation](#story-point-estimation)
+- [Conclusion](#conclusion)
+- [References](#references)
 
 ## Introduction
 
@@ -698,20 +711,17 @@ collected will include articles processed per second, latency, and error rate.
 
       **Mitigations:** - An internal Key-Value (KV) store that is consulted before processing an operation to check for the presence of a previous occurrence. <br> - If the operation is found in the KV store, indicating a duplicate, the node can discard or appropriately handle the redundant request, ensuring that each operation is processed only once in both the Paxos consensus process and article processing.
 
-5. **Invalid Article Processing Request:**
-    - The system needs to handle cases where an article processing request is invalid or contains incorrect parameters.
-
-6. **Load Balancer Failure:**
+5. **Load Balancer Failure:**
     - Issues with the load balancer may impact the even distribution of article processing requests across nodes.
 
     **Mitigations:** - A system that periodically takes snapshots of the load balancing state and persists the information <br> - In the event of a load balancer failure, the system can refer to the latest snapshot to understand the state prior to the failure and resume even distribution from the last known point, ensuring continued stability and efficiency in handling requests.
 
-7. **JSON KV Store Failure:**
+6. **JSON KV Store Failure:**
     - Failures in the JSON KV store, where state data is maintained, could lead to data inconsistencies.
 
     **Mitigations:** - A protocol where information is shared only after successful processing and storage in the JSON KV store. <br> - By adopting this strategy, the system ensures that data inconsistencies are minimized, as shared information reflects a state that has been successfully updated in the KV store, reducing the impact of potential failures on overall data integrity.
 
-8. **Unavailability of GPT:**
+7. **Unavailability of GPT:**
     - Single point of failure since the sentiment is calculated based on responses from the GPT. But we are assuming that each of the nodes will have their own custom GPT model with robust error handling.
 
     - Failures in establishing a connection to the OPENAI API during the article processing phase could occur.
