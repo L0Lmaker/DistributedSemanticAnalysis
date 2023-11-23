@@ -558,7 +558,9 @@ expect it to. For example, during campaign creation, we will need to define a sy
 research topic, the return value from GPT is in a form we can process.
 
 ### System Message example
-```
+
+----- start system message -----
+
 This is a question I want to answer from a set of articles:
 
 <insert research topic here>
@@ -571,7 +573,8 @@ if the question was “What is the overall impression of Donald Trump in my docu
 the dimensions may be: [“satisfactionWithPresidency”, “confidenceInTrump”, “futureOutlook”]
 
 Give me 5 in camelCase and as a JSON array
-```
+
+----- end system message -----
 
 Similarly we can define a system message to take an article as input and return the set of MDim Values.
 
@@ -638,30 +641,28 @@ campaignId=string&date=string
 { "MDims": [{ "articleId": string, mDims: {direction_quality": float, ...}}] }
 ```
 
-# Read-Repair Based State Reconciliation
-
-## Introduction
+## Read-Repair Based State Reconciliation
 
 To ensure that each node has the most up-to-date information before handling any specific campaign or article-related actions, our system will implement a read-repair mechanism. When a node receives a request referencing a `campaignId` or `articleId`, it will query other nodes to verify whether it has the latest information. If it detects that it lacks certain updates, it will reconcile its state by fetching the missing data.
 
-## Process Overview
+### Process Overview
 
-### Step 1: Request Receipt and Initial Check
+#### Step 1: Request Receipt and Initial Check
 
 - When a node (`RequestingNode`) receives a request that involves a `campaignId` or `articleId`, it performs an initial check against its local KV Store.
 
-### Step 2: Querying Other Nodes
+#### Step 2: Querying Other Nodes
 - If the `campaignId` or `articleId` is unknown or if there is any indication that an update might be missing (e.g., inconsistency in related meta-information), the `RequestingNode` sends a query to a subset or all other nodes to check for the most recent state.
   
-### Step 3: Fetching and Applying Missing Updates
+#### Step 3: Fetching and Applying Missing Updates
 - Based on responses from other nodes, the `RequestingNode` identifies if there are any updates it has missed.
 - The `RequestingNode` fetches the missing data and applies it in the correct order to ensure a consistent state.
 
-### Step 4: Execution or Forwarding of the Request
+#### Step 4: Execution or Forwarding of the Request
 - Once the `RequestingNode` is confident that its state is up-to-date, it can proceed to execute the original request.
 - If the request is read-related, and the node is still synchronizing, it may forward the read request to another node that has confirmed that it has the latest state.
 
-### Step 5: Client Notification
+#### Step 5: Client Notification
 - During this process, if there is any notable delay or failure, the `RequestingNode` should inform the client of the status, possibly suggesting a retry after some time.
 
 By incorporating this read-repair based approach, nodes are reactive and self-healing, asking for the latest information only when necessary. This method reduces overhead, as full state synchronization is triggered by actual demand rather than at regular intervals or by detecting a global versioning discrepancy.
