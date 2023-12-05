@@ -52,3 +52,8 @@ To use the CLI:
 The project design document can be found in `project-design-document.md`. Although we haven't implemented the 
 complete system, the prototype demonstrates the performance improvements of a distributed system over a centralized 
 one.
+
+## Some Items that were not implemented
+1. GPT connection (to save on cost)
+2. Paxos consensus (currently there is a shared KV Store)
+3. Read-Repair (currently there is a shared KV Store)
