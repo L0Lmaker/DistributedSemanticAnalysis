@@ -1,7 +1,8 @@
 import uuid
 import datetime
-
-from DistributedSemanticAnalysis.kvstore.store import KVStore
+import random
+import time
+from kvstore.store import KVStore
 
 
 class Node:
@@ -14,7 +15,8 @@ class Node:
         campaign_data = {
             "topic": topic,
             "created_at": datetime.datetime.now().isoformat(),
-            "MDims": self.get_dimensions("fake")  # Empty MDims, assuming initialization without data.
+            # Empty MDims, assuming initialization without data.
+            "MDims": self.get_dimensions(topic)
         }
         self.kv_store.set(campaign_id, campaign_data, "Campaigns")
         return campaign_id
@@ -28,12 +30,11 @@ class Node:
         campaign_data = self.kv_store.get(campaign_id, "Campaigns")
         if not campaign_data:
             return False, "Campaign not found"
-        article = {article_id: mdim_values}
+        article_processed = {article_id: mdim_values}
         # Persist the updated data
-        self.kv_store.set(campaign_id, article, "Articles")
-        #TODO add logic for MDimValuesByDate HERE, self.kv_store.set(campaign_id, sumDateStuff, "MDimValuesByDate")
-
-        return True, campaign_data["MDims"]
+        self.kv_store.set(campaign_id, article_processed, "Articles")
+        # TODO: add logic for MDimValuesByDate HERE, self.kv_store.set(campaign_id, sumDateStuff, "MDimValuesByDate")
+        return True, article_processed
 
     def query(self, campaign_id, date):
         campaign_data = self.kv_store.get(campaign_id, "Articles")
@@ -41,18 +42,22 @@ class Node:
             return None
         return campaign_data
 
-
     def get_dimensions(self, topic):
+        # TODO: make call to GPT to get dimensions from topic
         return [
-        "direction_quality",
-        "storytelling",
-        "casting_performance",
-        "cinematography",
-        "historical_accuracy"
+            "direction_quality",
+            "storytelling",
+            "casting_performance",
+            "cinematography",
+            "historical_accuracy"
         ]
+
     def analyze_document(self, document):
         # This would be replaced by actual analysis logic to extract MDims.
         # For the prototype, you can simulate with either static values or random generation.
+
+        # Random Delay
+        time.sleep(random.randint(1, 5))
         return {
             "direction_quality": 0.75,
             "storytelling": 0.85,
@@ -62,21 +67,21 @@ class Node:
         }
 
 
-# Usage Example
-# Assuming the KVStore class has been initialized as shown previously
-kv_store = KVStore('kv_store_data.json')
-node = Node(kv_store, 1)
-
-# Create a new campaign
-campaign_id = node.create_campaign("Killers of the Flower Moon")
-print(f"New campaign created with ID: {campaign_id}")
-
-# Process a document
-success, new_mdims = node.process_document(campaign_id, "Document content...", "hi", "2023-04-01")
-success2, new_mdims2 = node.process_document(campaign_id, "Document content...2", "hi2", "2023-04-01")
-success1, new_mdims1 = node.process_document(campaign_id, "Document content...", "hi", "2023-04-01")
-print(f"Document processed successfully: {success}, MDims: {new_mdims}")
-
-# Query campaign data
-mdims = node.query(campaign_id, "2023-04-01")
-print(f"Queried MDims: {mdims}")
+# # Usage Example
+# # Assuming the KVStore class has been initialized as shown previously
+# kv_store = KVStore('kv_store_data.json')
+# node = Node(kv_store, 1)
+#
+# # Create a new campaign
+# campaign_id = node.create_campaign("Killers of the Flower Moon")
+# print(f"New campaign created with ID: {campaign_id}")
+#
+# # Process a document
+# success, new_mdims = node.process_document(campaign_id, "Document content...", "hi", "2023-04-01")
+# success2, new_mdims2 = node.process_document(campaign_id, "Document content...2", "hi2", "2023-04-01")
+# success1, new_mdims1 = node.process_document(campaign_id, "Document content...", "hi", "2023-04-01")
+# print(f"Document processed successfully: {success}, MDims: {new_mdims}")
+#
+# # Query campaign data
+# mdims = node.query(campaign_id, "2023-04-01")
+# print(f"Queried MDims: {mdims}")

@@ -10,7 +10,7 @@ class KVStore:
         self.data = self._load_data_from_disk()  # Loads existing data or creates a new store.
         self.data["Campaigns"] = {}
         self.data["Articles"] = {}
-        self.data["MDimValuesByDate"]= {}
+        self.data["MDimValuesByDate"] = {}
 
     def _load_data_from_disk(self):
         if os.path.isfile(self.file_path):
@@ -29,26 +29,27 @@ class KVStore:
     def get(self, key, type):
         # Retrieve a value from the KV store.
         with self.lock:
-            if(type == "Campaigns"):
+            if type == "Campaigns":
                 return self.data["Campaigns"].get(key, None)
-            elif(type == "Articles"):
+            elif type == "Articles":
                 return self.data["Articles"].get(key, None)
-            elif(type == "MDimValuesByDate"):
+            elif type == "MDimValuesByDate":
                 return self.data["MDimValuesByDate"].get(key, None)
 
     def set(self, key, value, type):
         # Set a value in the KV store and persist changes to disk.
         with self.lock:
             obj = {key: value}
-            if(type == "Campaigns"):
+            if type == "Campaigns":
                 self.data["Campaigns"].update(obj)
                 self._persist_data_to_disk()
-            elif(type == "Articles"):
+            elif type == "Articles":
                 if key in self.data["Articles"]:
                     self.data["Articles"][key].update(value)
-                else: self.data["Articles"].update(obj)
+                else:
+                    self.data["Articles"].update(obj)
                 self._persist_data_to_disk()
-            elif(type == "MDimValuesByDate"):
+            elif type == "MDimValuesByDate":
                 self.data["MDimValuesByDate"].update(obj)
                 self._persist_data_to_disk()
 
