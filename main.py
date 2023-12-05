@@ -38,7 +38,7 @@ def run_with_n_workers(num_parallel_workers):
             rev = future_to_review[future]
             try:
                 data = future.result()
-                print(f"{rev} review evaluated to {data}")
+                print(f"review {rev['id']} processed")
             except Exception as exc:
                 print(f"{rev} generated an exception: {exc}")
 
@@ -48,15 +48,20 @@ if __name__ == '__main__':
     start_time = time.time()
     run_with_n_workers(1)
     end_time = time.time()
-    print(f"Runtime of the program for 1 Node Distributed System is {end_time - start_time} seconds")
+    t1 = end_time - start_time
+    print(f"Runtime of the program for 1 Node Distributed System is {end_time - start_time} seconds\n\n")
 
     num_nodes = 4
     print(f"Running with {num_nodes} workers")
     start_time = time.time()
     run_with_n_workers(num_nodes)
     end_time = time.time()
-    print(f"Runtime of the program for {num_nodes} Node Distributed System is {end_time - start_time} seconds")
+    t2 = end_time - start_time
+    print(f"Runtime of the program for {num_nodes} Node Distributed System is {end_time - start_time} seconds\n\n")
 
+    print(f"Performance Improvements of the Distributed System is a factor of {t1 / t2}x \n\n")
+
+    print("You can now interact with the data using the CLI")
     ds = DistributedSystem(KVStore('data/kv_store_data.json'), 4)
     # create cli interaction to explore the data
     while True:
