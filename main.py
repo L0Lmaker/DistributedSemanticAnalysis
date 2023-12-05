@@ -32,7 +32,7 @@ def run_with_n_workers(num_parallel_workers):
     with concurrent.futures.ThreadPoolExecutor(max_workers=num_parallel_workers) as executor:
         # Start the load operations and mark each future with its URL
         future_to_review = {
-            executor.submit(ds.process_document, campaign_id, review["content"], review["id"], 60): review for review in
+            executor.submit(ds.process_document, campaign_id, review["content"], review["id"], review["date"]): review for review in
             kotfm_reviews}
         for future in concurrent.futures.as_completed(future_to_review):
             rev = future_to_review[future]
@@ -56,3 +56,40 @@ if __name__ == '__main__':
     run_with_n_workers(num_nodes)
     end_time = time.time()
     print(f"Runtime of the program for {num_nodes} Node Distributed System is {end_time - start_time} seconds")
+
+    ds = DistributedSystem(KVStore('data/kv_store_data.json'), 4)
+    # create cli interaction to explore the data
+    while True:
+        print("1. Get Campaign Details")
+        print("2. Get Campaign ID List")
+        print("3. Get Article IDs for Campaign")
+        print("4. Get Date List")
+        print("5. Get By Date")
+        print("6. Get By Article ID")
+        print("7. Exit")
+        choice = input("Enter your choice: ")
+
+        # Logic for handling input
+        if choice == '1':
+            campaign_id = input("Enter Campaign ID: ")
+            print(ds.get_campaign_details(campaign_id))
+        elif choice == '2':
+            print(ds.get_campaign_id_list())
+        elif choice == '3':
+            campaign_id = input("Enter Campaign ID: ")
+            print(ds.get_article_ids_for_campaign(campaign_id))
+        elif choice == '4':
+            campaign_id = input("Enter Campaign ID: ")
+            print(ds.get_date_list(campaign_id))
+        elif choice == '5':
+            campaign_id = input("Enter Campaign ID: ")
+            date = input("Enter Date: ")
+            print(ds.get_by_date(campaign_id, date))
+        elif choice == '6':
+            campaign_id = input("Enter Campaign ID: ")
+            article_id = input("Enter Article ID: ")
+            print(ds.get_by_article_id(campaign_id, article_id))
+        elif choice == '7':
+            break
+        else:
+            print("Invalid Input")

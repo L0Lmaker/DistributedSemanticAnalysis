@@ -25,6 +25,26 @@ class DistributedSystem:
         node = self.get_node_from_load_balancer()
         return node.process_document(campaign_id, document, article_id, published_date)
 
-    def query(self, campaign_id, date):
+    def get_by_date(self, campaign_id, date):
         node = self.get_node_from_load_balancer()
-        return node.query(campaign_id, date)
+        return node.get_by_date(campaign_id, date)
+
+    def get_by_article_id(self, campaign_id, article_id):
+        node = self.get_node_from_load_balancer()
+        return node.get_by_article_id(campaign_id, article_id)
+
+    def get_campaign_details(self, campaign_id):
+        node = self.get_node_from_load_balancer()
+        return node.get_campaign_details(campaign_id)
+
+    def get_campaign_id_list(self):
+        node = self.get_node_from_load_balancer()
+        return node.get_campaign_id_list()
+
+    def get_article_ids_for_campaign(self, campaign_id):
+        node = self.get_node_from_load_balancer()
+        return node.get_article_ids_for_campaign(campaign_id)
+
+    def get_date_list(self, campaign_id):
+        node = self.get_node_from_load_balancer()
+        return node.get_date_list(campaign_id)
