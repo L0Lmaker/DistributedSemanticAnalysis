@@ -1,0 +1,1 @@
+Paxos implementation based on https://github.com/malfusion/paxos

@@ -8,6 +8,9 @@ class KVStore:
         self.file_path = file_path  # The path to the JSON file on disk.
         self.lock = threading.Lock()  # A lock to manage concurrent access to the KV store.
         self.data = self._load_data_from_disk()  # Loads existing data or creates a new store.
+        self.data["Campaigns"] = {}
+        self.data["Articles"] = {}
+        self.data["MDimValuesByDate"]= {}
 
     def _load_data_from_disk(self):
         if os.path.isfile(self.file_path):
@@ -23,16 +26,31 @@ class KVStore:
         with open(self.file_path, 'w') as file:
             json.dump(self.data, file, indent=4)
 
-    def get(self, key):
+    def get(self, key, type):
         # Retrieve a value from the KV store.
         with self.lock:
-            return self.data.get(key, None)
+            if(type == "Campaigns"):
+                return self.data["Campaigns"].get(key, None)
+            elif(type == "Articles"):
+                return self.data["Articles"].get(key, None)
+            elif(type == "MDimValuesByDate"):
+                return self.data["MDimValuesByDate"].get(key, None)
 
-    def set(self, key, value):
+    def set(self, key, value, type):
         # Set a value in the KV store and persist changes to disk.
         with self.lock:
-            self.data[key] = value
-            self._persist_data_to_disk()
+            obj = {key: value}
+            if(type == "Campaigns"):
+                self.data["Campaigns"].update(obj)
+                self._persist_data_to_disk()
+            elif(type == "Articles"):
+                if key in self.data["Articles"]:
+                    self.data["Articles"][key].update(value)
+                else: self.data["Articles"].update(obj)
+                self._persist_data_to_disk()
+            elif(type == "MDimValuesByDate"):
+                self.data["MDimValuesByDate"].update(obj)
+                self._persist_data_to_disk()
 
     def delete(self, key):
         # Remove a key from the KV store if it exists and persist changes to disk.
