@@ -13,7 +13,7 @@ def run_with_n_workers(num_parallel_workers):
     kv_store = KVStore('data/kv_store_data.json')
 
     # Load reviews from the data.json file
-    with open('movie-review-data/data.json') as json_file:
+    with open('movie-review-data/data.json', encoding='utf-8') as json_file:
         data = json.load(json_file)
 
     # Initialize the distributed system with 4 nodes.
